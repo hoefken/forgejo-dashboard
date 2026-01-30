@@ -467,17 +467,17 @@
 
           {/* Status Bar */}
           {filteredAndGroupedJobs.length > 0 && (
-            <div style={{ background: statusInfo.bg, borderBottom: `2px solid ${statusInfo.color}`, padding: '0.5rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ background: statusInfo.bg, borderBottom: `2px solid ${statusInfo.color}`, padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <StatusIcon width={18} height={18} style={{ color: statusInfo.color }} />
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: statusInfo.color }}>
+                <StatusIcon width={28} height={28} style={{ color: statusInfo.color }} />
+                <span style={{ fontSize: '1rem', fontWeight: 600, color: statusInfo.color }}>
                   {filteredAndGroupedJobs.length} Jobs
                   {overallStatus === 'success' && ' \u2014 All Passing'}
                   {overallStatus === 'failure' && ` \u2014 ${filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.failure).length} Failing`}
                   {overallStatus === 'running' && ` \u2014 ${filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.running).length} Running`}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.7rem', color: t.textMuted }}>
+              <div style={{ display: 'flex', gap: '1.25rem', fontSize: '1rem', color: t.textMuted }}>
                 <span style={{ color: '#22c55e' }}>{'\u2713'} {filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.success).length}</span>
                 <span style={{ color: '#ef4444' }}>{'\u2717'} {filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.failure).length}</span>
                 <span style={{ color: '#3b82f6' }}>{'\u25cf'} {filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.running).length}</span>
