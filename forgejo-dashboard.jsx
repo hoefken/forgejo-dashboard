@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, PlayCircle, Settings, Search, Trash2, ExternalLink, GitBranch, Activity, Filter, Regex, FolderSearch, ChevronDown, ChevronRight, User, GitCommit, MessageSquare } from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, PlayCircle, Settings, Search, Trash2, ExternalLink, GitBranch, Activity, Filter, Regex, FolderSearch, ChevronDown, ChevronRight, User, GitCommit, MessageSquare, Sun, Moon } from 'lucide-react';
 
 // Status mapping für Forgejo Actions
 const STATUS_MAP = {
@@ -11,6 +11,73 @@ const STATUS_MAP = {
   pending: { color: '#f59e0b', bg: '#451a03', icon: Clock, label: 'Pending', priority: 3 },
   skipped: { color: '#6b7280', bg: '#1f2937', icon: AlertCircle, label: 'Skipped', priority: 1 },
   unknown: { color: '#6b7280', bg: '#1f2937', icon: AlertCircle, label: 'Unknown', priority: 0 },
+};
+
+const THEMES = {
+  dark: {
+    bg: 'linear-gradient(180deg, #0d0d0d 0%, #1a1a1a 100%)',
+    text: '#e5e5e5',
+    textBright: '#fff',
+    textMuted: '#888',
+    textDim: '#666',
+    textDimmer: '#555',
+    textDimmest: '#444',
+    border: '#2a2a2a',
+    borderLight: '#333',
+    borderDark: '#222',
+    headerBg: 'rgba(0,0,0,0.5)',
+    panelBg: '#141414',
+    inputBg: '#0a0a0a',
+    cardBg: '#141414',
+    rowBg: '#1a1a1a',
+    rowAltBg: '#111',
+    rowHoverBg: '#1a1a1a',
+    repoBg: '#0a0a0a',
+    expandedBg: '#0d0d0d',
+    logBg: '#0a0a0a',
+    statsBg: '#1a1a1a',
+    btnBg: '#1a1a1a',
+    btnActiveBg: '#333',
+    btnActiveText: '#fff',
+    orgBg: '#1a1a1a',
+    linkColor: '#3b82f6',
+    scrollTrack: '#0a0a0a',
+    scrollThumb: '#333',
+    scrollThumbHover: '#444',
+    placeholderColor: '#444',
+  },
+  light: {
+    bg: 'linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%)',
+    text: '#1a1a1a',
+    textBright: '#000',
+    textMuted: '#555',
+    textDim: '#777',
+    textDimmer: '#888',
+    textDimmest: '#aaa',
+    border: '#e0e0e0',
+    borderLight: '#d0d0d0',
+    borderDark: '#e5e5e5',
+    headerBg: 'rgba(255,255,255,0.9)',
+    panelBg: '#f5f5f5',
+    inputBg: '#ffffff',
+    cardBg: '#ffffff',
+    rowBg: '#f5f5f5',
+    rowAltBg: '#fafafa',
+    rowHoverBg: '#f0f0f0',
+    repoBg: '#f0f0f0',
+    expandedBg: '#f8f8f8',
+    logBg: '#ffffff',
+    statsBg: '#f0f0f0',
+    btnBg: '#f0f0f0',
+    btnActiveBg: '#d0d0d0',
+    btnActiveText: '#000',
+    orgBg: '#f0f0f0',
+    linkColor: '#2563eb',
+    scrollTrack: '#f0f0f0',
+    scrollThumb: '#ccc',
+    scrollThumbHover: '#bbb',
+    placeholderColor: '#aaa',
+  },
 };
 
 const getStatus = (status, conclusion) => {
@@ -25,7 +92,7 @@ const formatDuration = (start, end) => {
   const startDate = new Date(start);
   const endDate = end ? new Date(end) : new Date();
   const diff = Math.floor((endDate - startDate) / 1000);
-  
+
   if (diff < 60) return `${diff}s`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`;
   return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
@@ -36,7 +103,7 @@ const formatTimeAgo = (date) => {
   const now = new Date();
   const then = new Date(date);
   const diff = Math.floor((now - then) / 1000);
-  
+
   if (diff < 60) return 'just now';
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
@@ -95,7 +162,7 @@ export default function ForgejoDashboard() {
     branchPattern: '^main$',
     organizations: [],
   });
-  
+
   const [discoveredRepos, setDiscoveredRepos] = useState([]);
   const [allRuns, setAllRuns] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -109,6 +176,15 @@ export default function ForgejoDashboard() {
   const [expandedJobs, setExpandedJobs] = useState(new Set());
   const [expandedRepos, setExpandedRepos] = useState(new Set());
   const [discoveryLog, setDiscoveryLog] = useState([]);
+  const [themeMode, setThemeMode] = useState(() => {
+    try { return localStorage.getItem('forgejo-dashboard-theme') || 'dark'; } catch { return 'dark'; }
+  });
+  const t = THEMES[themeMode] || THEMES.dark;
+
+  // Save theme to localStorage
+  useEffect(() => {
+    localStorage.setItem('forgejo-dashboard-theme', themeMode);
+  }, [themeMode]);
 
   // Load config from localStorage
   useEffect(() => {
@@ -140,15 +216,15 @@ export default function ForgejoDashboard() {
     const separator = endpoint.includes('?') ? '&' : '?';
     const tokenParam = config.token ? `${separator}token=${config.token}` : '';
     const url = `${config.baseUrl}/api/v1${endpoint}${tokenParam}`;
-    
+
     const response = await fetch(url, {
       headers: { 'Accept': 'application/json' }
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    
+
     return response.json();
   }, [config.baseUrl, config.token]);
 
@@ -157,7 +233,7 @@ export default function ForgejoDashboard() {
     const repos = [];
     let page = 1;
     const limit = 50;
-    
+
     while (true) {
       try {
         const data = await apiCall(`/orgs/${org}/repos?page=${page}&limit=${limit}`);
@@ -170,7 +246,7 @@ export default function ForgejoDashboard() {
         break;
       }
     }
-    
+
     return repos;
   }, [apiCall]);
 
@@ -201,38 +277,38 @@ export default function ForgejoDashboard() {
   // Discovery: Alle Repos und deren Runs finden
   const discoverJobs = useCallback(async () => {
     if (!config.baseUrl) return;
-    
+
     setDiscovering(true);
     setDiscoveryLog([]);
     setError(null);
-    
+
     try {
       let allRepos = [];
-      
+
       for (const org of config.organizations) {
         addLog(`🔍 Durchsuche Organisation: ${org}`);
         const repos = await fetchOrgRepos(org);
         addLog(`   → ${repos.length} Repos gefunden`);
         allRepos.push(...repos);
       }
-      
+
       if (config.repoPattern && config.repoPattern !== '.*') {
         const searchTerm = config.repoPattern
           .replace(/\.\*/g, '')
           .replace(/[^a-zA-Z0-9-_]/g, '')
           .slice(0, 20);
-        
+
         if (searchTerm.length >= 2) {
           addLog(`🔍 Suche nach Repos mit: "${searchTerm}"`);
           const searchResults = await searchRepos(searchTerm);
           addLog(`   → ${searchResults.length} Repos gefunden`);
-          
+
           const existingIds = new Set(allRepos.map(r => r.id));
           const newRepos = searchResults.filter(r => !existingIds.has(r.id));
           allRepos.push(...newRepos);
         }
       }
-      
+
       let repoRegex;
       try {
         repoRegex = new RegExp(config.repoPattern, 'i');
@@ -240,20 +316,20 @@ export default function ForgejoDashboard() {
         addLog(`⚠️ Ungültiges Repo-Pattern: ${e.message}`);
         repoRegex = /.*/;
       }
-      
-      const matchingRepos = allRepos.filter(repo => 
+
+      const matchingRepos = allRepos.filter(repo =>
         repoRegex.test(repo.full_name) || repoRegex.test(repo.name)
       );
-      
+
       addLog(`✅ ${matchingRepos.length} Repos entsprechen dem Pattern`);
       setDiscoveredRepos(matchingRepos);
-      
+
       const allRunsCollected = [];
-      
+
       for (const repo of matchingRepos) {
         addLog(`📥 Lade Runs für: ${repo.full_name}`);
         const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
-        
+
         const enrichedRuns = runs.map(run => ({
           ...run,
           _repo: repo,
@@ -261,14 +337,14 @@ export default function ForgejoDashboard() {
           _workflowName: getWorkflowName(run),
           _jobPath: `${repo.full_name}/${getWorkflowName(run)}`,
         }));
-        
+
         allRunsCollected.push(...enrichedRuns);
       }
-      
+
       addLog(`✅ Insgesamt ${allRunsCollected.length} Runs geladen`);
       setAllRuns(allRunsCollected);
       setLastUpdate(new Date());
-      
+
     } catch (err) {
       setError(err.message);
       addLog(`❌ Fehler: ${err.message}`);
@@ -280,12 +356,12 @@ export default function ForgejoDashboard() {
   // Nur Runs aktualisieren (schneller)
   const refreshRuns = useCallback(async () => {
     if (!config.baseUrl || discoveredRepos.length === 0) return;
-    
+
     setLoading(true);
-    
+
     try {
       const allRunsCollected = [];
-      
+
       for (const repo of discoveredRepos) {
         const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
         const enrichedRuns = runs.map(run => ({
@@ -297,7 +373,7 @@ export default function ForgejoDashboard() {
         }));
         allRunsCollected.push(...enrichedRuns);
       }
-      
+
       setAllRuns(allRunsCollected);
       setLastUpdate(new Date());
     } catch (err) {
@@ -328,13 +404,13 @@ export default function ForgejoDashboard() {
       const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
       return matchesWorkflow && matchesBranch;
     });
-    
+
     const jobMap = new Map();
-    
+
     for (const run of filtered) {
       const key = run._jobPath;
       const existing = jobMap.get(key);
-      
+
       if (!existing || new Date(run.created_at) > new Date(existing.latestRun.created_at)) {
         jobMap.set(key, {
           jobPath: key,
@@ -348,26 +424,26 @@ export default function ForgejoDashboard() {
         existing.allRuns.push(run);
       }
     }
-    
+
     for (const job of jobMap.values()) {
       job.allRuns.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       job.allRuns = job.allRuns.slice(0, 15);
     }
-    
+
     const jobs = Array.from(jobMap.values());
     jobs.sort((a, b) => {
       const statusA = getStatus(a.latestRun.status, a.latestRun.conclusion);
       const statusB = getStatus(b.latestRun.status, b.latestRun.conclusion);
       return statusB.priority - statusA.priority;
     });
-    
+
     return jobs;
   }, [allRuns, config.workflowPattern, config.branchPattern]);
 
   // Auto-refresh
   useEffect(() => {
     if (discoveredRepos.length === 0 || !config.baseUrl || autoRefresh === 0) return;
-    
+
     const interval = setInterval(refreshRuns, autoRefresh * 1000);
     return () => clearInterval(interval);
   }, [discoveredRepos, config.baseUrl, autoRefresh, refreshRuns]);
@@ -391,13 +467,13 @@ export default function ForgejoDashboard() {
 
   const getOverallStatus = () => {
     if (filteredAndGroupedJobs.length === 0) return 'unknown';
-    
+
     const statuses = filteredAndGroupedJobs.map(job => {
       const run = job.latestRun;
       if (run.status === 'completed') return run.conclusion;
       return run.status;
     });
-    
+
     if (statuses.includes('failure')) return 'failure';
     if (statuses.includes('running')) return 'running';
     if (statuses.includes('pending') || statuses.includes('waiting')) return 'pending';
@@ -451,11 +527,11 @@ export default function ForgejoDashboard() {
     const author = getAuthor(run);
     const message = getCommitMessage(run);
     const sha = getCommitSha(run);
-    
+
     return (
-      <tr style={{ 
-        background: isFirst ? '#1a1a1a' : '#111',
-        borderBottom: '1px solid #222',
+      <tr style={{
+        background: isFirst ? t.rowBg : t.rowAltBg,
+        borderBottom: `1px solid ${t.borderDark}`,
       }}>
         <td style={{ padding: '0.5rem 1rem', width: '30px' }}>
           <div style={{
@@ -473,7 +549,7 @@ export default function ForgejoDashboard() {
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              color: '#e5e5e5',
+              color: t.text,
               textDecoration: 'none',
               display: 'flex',
               alignItems: 'center',
@@ -481,30 +557,30 @@ export default function ForgejoDashboard() {
               fontSize: '0.8rem',
             }}
           >
-            <span style={{ color: '#666' }}>#{run.run_number || run.id}</span>
-            <ExternalLink size={10} style={{ color: '#444' }} />
+            <span style={{ color: t.textDim }}>#{run.run_number || run.id}</span>
+            <ExternalLink size={10} style={{ color: t.textDimmest }} />
           </a>
         </td>
         <td style={{ padding: '0.5rem 1rem', maxWidth: '300px' }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
             gap: '0.5rem',
             fontSize: '0.75rem',
           }}>
-            <GitCommit size={12} style={{ color: '#666', flexShrink: 0 }} />
+            <GitCommit size={12} style={{ color: t.textDim, flexShrink: 0 }} />
             <a
               href={`${config.baseUrl}/${repoFullName}/commit/${run.head_sha || run.head_commit?.id}`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#3b82f6', textDecoration: 'none', fontFamily: 'monospace' }}
+              style={{ color: t.linkColor, textDecoration: 'none', fontFamily: 'monospace' }}
             >
               {sha}
             </a>
-            <span style={{ 
-              color: '#888', 
-              overflow: 'hidden', 
-              textOverflow: 'ellipsis', 
+            <span style={{
+              color: t.textMuted,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               flex: 1,
             }} title={message}>
@@ -513,33 +589,33 @@ export default function ForgejoDashboard() {
           </div>
         </td>
         <td style={{ padding: '0.5rem 1rem' }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
             gap: '0.4rem',
             fontSize: '0.75rem',
-            color: '#888',
+            color: t.textMuted,
           }}>
-            <User size={12} style={{ color: '#666' }} />
+            <User size={12} style={{ color: t.textDim }} />
             {author}
           </div>
         </td>
         <td style={{ padding: '0.5rem 1rem' }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
             gap: '0.4rem',
             fontSize: '0.75rem',
-            color: '#666',
+            color: t.textDim,
           }}>
             <GitBranch size={12} />
             {run.head_branch || 'main'}
           </div>
         </td>
-        <td style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', color: '#666' }}>
+        <td style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', color: t.textDim }}>
           {formatTimeAgo(run.created_at)}
         </td>
-        <td style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', color: '#666' }}>
+        <td style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', color: t.textDim }}>
           {formatDuration(run.started_at, run.completed_at)}
         </td>
         <td style={{ padding: '0.5rem 1rem' }}>
@@ -561,14 +637,14 @@ export default function ForgejoDashboard() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(180deg, #0d0d0d 0%, #1a1a1a 100%)',
-      color: '#e5e5e5',
+      background: t.bg,
+      color: t.text,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
     }}>
       {/* Header */}
       <header style={{
-        background: 'rgba(0,0,0,0.5)',
-        borderBottom: '1px solid #2a2a2a',
+        background: t.headerBg,
+        borderBottom: `1px solid ${t.border}`,
         padding: '0.75rem 1.5rem',
         display: 'flex',
         justifyContent: 'space-between',
@@ -595,7 +671,7 @@ export default function ForgejoDashboard() {
               margin: 0,
               fontSize: '1.25rem',
               fontWeight: 700,
-              color: '#fff',
+              color: t.textBright,
               letterSpacing: '-0.02em',
             }}>
               Forgejo Pipeline Monitor
@@ -603,7 +679,7 @@ export default function ForgejoDashboard() {
             <p style={{
               margin: 0,
               fontSize: '0.65rem',
-              color: '#666',
+              color: t.textDim,
               letterSpacing: '0.15em',
               textTransform: 'uppercase',
             }}>
@@ -611,23 +687,23 @@ export default function ForgejoDashboard() {
             </p>
           </div>
         </div>
-        
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           {lastUpdate && (
-            <span style={{ fontSize: '0.7rem', color: '#555' }}>
+            <span style={{ fontSize: '0.7rem', color: t.textDimmer }}>
               {lastUpdate.toLocaleTimeString()}
             </span>
           )}
-          
+
           <select
             value={autoRefresh}
             onChange={(e) => setAutoRefresh(Number(e.target.value))}
             style={{
-              background: '#1a1a1a',
-              border: '1px solid #333',
+              background: t.btnBg,
+              border: `1px solid ${t.borderLight}`,
               borderRadius: '4px',
               padding: '0.4rem 0.6rem',
-              color: '#999',
+              color: t.textMuted,
               fontSize: '0.7rem',
               cursor: 'pointer',
             }}
@@ -637,16 +713,16 @@ export default function ForgejoDashboard() {
             <option value={30}>30s</option>
             <option value={60}>60s</option>
           </select>
-          
+
           <button
             onClick={refreshRuns}
             disabled={loading || discoveredRepos.length === 0}
             style={{
-              background: '#1a1a1a',
-              border: '1px solid #333',
+              background: t.btnBg,
+              border: `1px solid ${t.borderLight}`,
               borderRadius: '4px',
               padding: '0.4rem 0.8rem',
-              color: '#999',
+              color: t.textMuted,
               cursor: loading ? 'wait' : 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -654,20 +730,34 @@ export default function ForgejoDashboard() {
               fontSize: '0.75rem',
             }}
           >
-            <RefreshCw size={14} style={{ 
-              animation: loading ? 'spin 1s linear infinite' : 'none' 
+            <RefreshCw size={14} style={{
+              animation: loading ? 'spin 1s linear infinite' : 'none'
             }} />
             Refresh
           </button>
-          
+
+          <button
+            onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+            style={{
+              background: t.btnBg,
+              border: `1px solid ${t.borderLight}`,
+              borderRadius: '4px',
+              padding: '0.4rem',
+              color: t.textDim,
+              cursor: 'pointer',
+            }}
+          >
+            {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
           <button
             onClick={() => setShowSettings(!showSettings)}
             style={{
-              background: showSettings ? '#333' : '#1a1a1a',
-              border: '1px solid #333',
+              background: showSettings ? t.btnActiveBg : t.btnBg,
+              border: `1px solid ${t.borderLight}`,
               borderRadius: '4px',
               padding: '0.4rem',
-              color: showSettings ? '#fff' : '#666',
+              color: showSettings ? t.btnActiveText : t.textDim,
               cursor: 'pointer',
             }}
           >
@@ -702,8 +792,8 @@ export default function ForgejoDashboard() {
               {overallStatus === 'running' && ` — ${filteredAndGroupedJobs.filter(j => j.latestRun.status === 'running').length} Running`}
             </span>
           </div>
-          
-          <div style={{ display: 'flex', gap: '1rem', fontSize: '0.7rem', color: '#888' }}>
+
+          <div style={{ display: 'flex', gap: '1rem', fontSize: '0.7rem', color: t.textMuted }}>
             <span>✓ {filteredAndGroupedJobs.filter(j => j.latestRun.conclusion === 'success').length}</span>
             <span style={{ color: '#ef4444' }}>✗ {filteredAndGroupedJobs.filter(j => j.latestRun.conclusion === 'failure').length}</span>
             <span style={{ color: '#3b82f6' }}>● {filteredAndGroupedJobs.filter(j => j.latestRun.status === 'running').length}</span>
@@ -717,8 +807,8 @@ export default function ForgejoDashboard() {
           <div style={{
             width: '320px',
             flexShrink: 0,
-            background: '#141414',
-            borderRight: '1px solid #2a2a2a',
+            background: t.panelBg,
+            borderRight: `1px solid ${t.border}`,
             padding: '1.25rem',
             overflowY: 'auto',
           }}>
@@ -726,19 +816,19 @@ export default function ForgejoDashboard() {
               margin: '0 0 1.25rem 0',
               fontSize: '0.7rem',
               fontWeight: 600,
-              color: '#666',
+              color: t.textDim,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
             }}>
               Configuration
             </h2>
-            
+
             {/* Forgejo URL */}
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{
                 display: 'block',
                 fontSize: '0.7rem',
-                color: '#555',
+                color: t.textDimmer,
                 marginBottom: '0.4rem',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
@@ -752,23 +842,23 @@ export default function ForgejoDashboard() {
                 placeholder="https://git.alm.anlei-service.de"
                 style={{
                   width: '100%',
-                  background: '#0a0a0a',
-                  border: '1px solid #333',
+                  background: t.inputBg,
+                  border: `1px solid ${t.borderLight}`,
                   borderRadius: '4px',
                   padding: '0.6rem',
-                  color: '#e5e5e5',
+                  color: t.text,
                   fontSize: '0.8rem',
                   boxSizing: 'border-box',
                 }}
               />
             </div>
-            
+
             {/* API Token */}
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{
                 display: 'block',
                 fontSize: '0.7rem',
-                color: '#555',
+                color: t.textDimmer,
                 marginBottom: '0.4rem',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
@@ -782,17 +872,17 @@ export default function ForgejoDashboard() {
                 placeholder="5993a9683b8de8c2493fe6e88eefd70a4df04ccb"
                 style={{
                   width: '100%',
-                  background: '#0a0a0a',
-                  border: '1px solid #333',
+                  background: t.inputBg,
+                  border: `1px solid ${t.borderLight}`,
                   borderRadius: '4px',
                   padding: '0.6rem',
-                  color: '#e5e5e5',
+                  color: t.text,
                   fontSize: '0.8rem',
                   boxSizing: 'border-box',
                 }}
               />
             </div>
-            
+
             {/* Organizations */}
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{
@@ -800,7 +890,7 @@ export default function ForgejoDashboard() {
                 alignItems: 'center',
                 gap: '0.4rem',
                 fontSize: '0.7rem',
-                color: '#555',
+                color: t.textDimmer,
                 marginBottom: '0.4rem',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
@@ -817,11 +907,11 @@ export default function ForgejoDashboard() {
                   placeholder="org-name"
                   style={{
                     flex: 1,
-                    background: '#0a0a0a',
-                    border: '1px solid #333',
+                    background: t.inputBg,
+                    border: `1px solid ${t.borderLight}`,
                     borderRadius: '4px',
                     padding: '0.5rem',
-                    color: '#e5e5e5',
+                    color: t.text,
                     fontSize: '0.8rem',
                   }}
                 />
@@ -849,8 +939,8 @@ export default function ForgejoDashboard() {
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '0.4rem',
-                        background: '#1a1a1a',
-                        border: '1px solid #333',
+                        background: t.orgBg,
+                        border: `1px solid ${t.borderLight}`,
                         borderRadius: '4px',
                         padding: '0.25rem 0.5rem',
                         fontSize: '0.75rem',
@@ -862,7 +952,7 @@ export default function ForgejoDashboard() {
                         style={{
                           background: 'transparent',
                           border: 'none',
-                          color: '#666',
+                          color: t.textDim,
                           cursor: 'pointer',
                           padding: 0,
                           display: 'flex',
@@ -875,7 +965,7 @@ export default function ForgejoDashboard() {
                 </div>
               )}
             </div>
-            
+
             {/* Repo Pattern */}
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{
@@ -883,7 +973,7 @@ export default function ForgejoDashboard() {
                 alignItems: 'center',
                 gap: '0.4rem',
                 fontSize: '0.7rem',
-                color: '#555',
+                color: t.textDimmer,
                 marginBottom: '0.4rem',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
@@ -898,8 +988,8 @@ export default function ForgejoDashboard() {
                 placeholder=".*amerigo.*"
                 style={{
                   width: '100%',
-                  background: '#0a0a0a',
-                  border: '1px solid #333',
+                  background: t.inputBg,
+                  border: `1px solid ${t.borderLight}`,
                   borderRadius: '4px',
                   padding: '0.6rem',
                   color: '#f97316',
@@ -909,7 +999,7 @@ export default function ForgejoDashboard() {
                 }}
               />
             </div>
-            
+
             {/* Workflow Pattern */}
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{
@@ -917,7 +1007,7 @@ export default function ForgejoDashboard() {
                 alignItems: 'center',
                 gap: '0.4rem',
                 fontSize: '0.7rem',
-                color: '#555',
+                color: t.textDimmer,
                 marginBottom: '0.4rem',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
@@ -932,8 +1022,8 @@ export default function ForgejoDashboard() {
                 rows={3}
                 style={{
                   width: '100%',
-                  background: '#0a0a0a',
-                  border: '1px solid #333',
+                  background: t.inputBg,
+                  border: `1px solid ${t.borderLight}`,
                   borderRadius: '4px',
                   padding: '0.6rem',
                   color: '#8b5cf6',
@@ -952,7 +1042,7 @@ export default function ForgejoDashboard() {
                 alignItems: 'center',
                 gap: '0.4rem',
                 fontSize: '0.7rem',
-                color: '#555',
+                color: t.textDimmer,
                 marginBottom: '0.4rem',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
@@ -967,8 +1057,8 @@ export default function ForgejoDashboard() {
                 placeholder="^main$"
                 style={{
                   width: '100%',
-                  background: '#0a0a0a',
-                  border: '1px solid #333',
+                  background: t.inputBg,
+                  border: `1px solid ${t.borderLight}`,
                   borderRadius: '4px',
                   padding: '0.6rem',
                   color: '#22d3ee',
@@ -980,13 +1070,13 @@ export default function ForgejoDashboard() {
               <span style={{
                 display: 'block',
                 fontSize: '0.6rem',
-                color: '#444',
+                color: t.textDimmest,
                 marginTop: '0.3rem',
               }}>
                 Default: ^main$ (nur main-Branch). Leer lassen für alle Branches.
               </span>
             </div>
-            
+
             {/* Discover Button */}
             <button
               onClick={discoverJobs}
@@ -1020,45 +1110,45 @@ export default function ForgejoDashboard() {
                 </>
               )}
             </button>
-            
+
             {/* Discovery Log */}
             {discoveryLog.length > 0 && (
               <div style={{
                 marginTop: '1rem',
-                background: '#0a0a0a',
-                border: '1px solid #222',
+                background: t.logBg,
+                border: `1px solid ${t.borderDark}`,
                 borderRadius: '4px',
                 padding: '0.75rem',
                 maxHeight: '200px',
                 overflowY: 'auto',
                 fontSize: '0.65rem',
                 fontFamily: 'monospace',
-                color: '#666',
+                color: t.textDim,
               }}>
                 {discoveryLog.map((log, i) => (
                   <div key={i} style={{ marginBottom: '0.25rem' }}>{log}</div>
                 ))}
               </div>
             )}
-            
+
             {/* Stats */}
             {discoveredRepos.length > 0 && (
               <div style={{
                 marginTop: '1rem',
                 padding: '0.75rem',
-                background: '#1a1a1a',
+                background: t.statsBg,
                 borderRadius: '6px',
                 fontSize: '0.7rem',
-                color: '#666',
+                color: t.textDim,
               }}>
                 <div style={{ marginBottom: '0.4rem' }}>
-                  <strong style={{ color: '#888' }}>{discoveredRepos.length}</strong> Repos discovered
+                  <strong style={{ color: t.textMuted }}>{discoveredRepos.length}</strong> Repos discovered
                 </div>
                 <div style={{ marginBottom: '0.4rem' }}>
-                  <strong style={{ color: '#888' }}>{allRuns.length}</strong> Total runs loaded
+                  <strong style={{ color: t.textMuted }}>{allRuns.length}</strong> Total runs loaded
                 </div>
                 <div>
-                  <strong style={{ color: '#888' }}>{filteredAndGroupedJobs.length}</strong> Jobs matching filters
+                  <strong style={{ color: t.textMuted }}>{filteredAndGroupedJobs.length}</strong> Jobs matching filters
                 </div>
               </div>
             )}
@@ -1080,19 +1170,19 @@ export default function ForgejoDashboard() {
               ⚠️ {error}
             </div>
           )}
-          
+
           {filteredAndGroupedJobs.length === 0 ? (
             <div style={{
               textAlign: 'center',
               padding: '4rem 2rem',
-              color: '#444',
+              color: t.textDimmest,
             }}>
               <Search size={48} style={{ marginBottom: '1rem', opacity: 0.3 }} />
-              <h2 style={{ margin: '0 0 0.5rem 0', color: '#555', fontWeight: 500 }}>
+              <h2 style={{ margin: '0 0 0.5rem 0', color: t.textDimmer, fontWeight: 500 }}>
                 {discoveredRepos.length === 0 ? 'No Jobs Discovered' : 'No Matching Workflows'}
               </h2>
               <p style={{ margin: 0, fontSize: '0.85rem' }}>
-                {discoveredRepos.length === 0 
+                {discoveredRepos.length === 0
                   ? 'Configure organizations and patterns, then click "Discover Jobs"'
                   : 'Adjust your workflow pattern to find matching jobs'}
               </p>
@@ -1100,50 +1190,50 @@ export default function ForgejoDashboard() {
           ) : (
             /* Table View with expandable rows */
             <div style={{
-              background: '#141414',
-              border: '1px solid #2a2a2a',
+              background: t.cardBg,
+              border: `1px solid ${t.border}`,
               borderRadius: '8px',
               overflow: 'hidden',
             }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                 <thead>
-                  <tr style={{ background: '#1a1a1a', borderBottom: '1px solid #2a2a2a' }}>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#666', fontWeight: 500, width: '30px' }}></th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#666', fontWeight: 500, width: '40px' }}>S</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#666', fontWeight: 500 }}>Workflow</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#666', fontWeight: 500 }}>Last Commit</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#666', fontWeight: 500, width: '120px' }}>Author</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#666', fontWeight: 500, width: '100px' }}>Branch</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#666', fontWeight: 500, width: '100px' }}>Time</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#666', fontWeight: 500, width: '100px' }}>History</th>
+                  <tr style={{ background: t.rowBg, borderBottom: `1px solid ${t.border}` }}>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '30px' }}></th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '40px' }}>S</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500 }}>Workflow</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500 }}>Last Commit</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '120px' }}>Author</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '100px' }}>Branch</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '100px' }}>Time</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center', color: t.textDim, fontWeight: 500, width: '100px' }}>History</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Array.from(jobsByRepo.entries()).map(([repoName, jobs]) => (
                     <React.Fragment key={repoName}>
                       {/* Repo Header Row */}
-                      <tr 
-                        style={{ 
-                          background: '#0a0a0a', 
+                      <tr
+                        style={{
+                          background: t.repoBg,
                           cursor: 'pointer',
-                          borderBottom: '1px solid #222',
+                          borderBottom: `1px solid ${t.borderDark}`,
                         }}
                         onClick={() => toggleRepoExpand(repoName)}
                       >
                         <td colSpan={8} style={{ padding: '0.6rem 1rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {expandedRepos.has(repoName) || expandedRepos.size === 0 ? 
-                              <ChevronDown size={14} style={{ color: '#666' }} /> : 
-                              <ChevronRight size={14} style={{ color: '#666' }} />
+                            {expandedRepos.has(repoName) || expandedRepos.size === 0 ?
+                              <ChevronDown size={14} style={{ color: t.textDim }} /> :
+                              <ChevronRight size={14} style={{ color: t.textDim }} />
                             }
                             <a
                               href={`${config.baseUrl}/${repoName}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              style={{ 
-                                color: '#999', 
-                                fontWeight: 600, 
+                              style={{
+                                color: t.textMuted,
+                                fontWeight: 600,
                                 textDecoration: 'none',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -1151,37 +1241,37 @@ export default function ForgejoDashboard() {
                               }}
                             >
                               {repoName}
-                              <ExternalLink size={12} style={{ color: '#444' }} />
+                              <ExternalLink size={12} style={{ color: t.textDimmest }} />
                             </a>
-                            <span style={{ color: '#444', fontSize: '0.7rem' }}>({jobs.length} workflows)</span>
+                            <span style={{ color: t.textDimmest, fontSize: '0.7rem' }}>({jobs.length} workflows)</span>
                           </div>
                         </td>
                       </tr>
-                      
+
                       {/* Job Rows */}
                       {(expandedRepos.has(repoName) || expandedRepos.size === 0) && jobs.map(job => {
                         const status = getStatus(job.latestRun.status, job.latestRun.conclusion);
                         const isExpanded = expandedJobs.has(job.jobPath);
                         const latestRun = job.latestRun;
-                        
+
                         return (
                           <React.Fragment key={job.jobPath}>
                             {/* Main Job Row */}
-                            <tr 
-                              style={{ 
-                                borderBottom: '1px solid #1a1a1a',
-                                background: isExpanded ? '#1a1a1a' : 'transparent',
+                            <tr
+                              style={{
+                                borderBottom: `1px solid ${t.rowBg}`,
+                                background: isExpanded ? t.rowBg : 'transparent',
                                 cursor: 'pointer',
                                 transition: 'background 0.15s',
                               }}
                               onClick={() => toggleJobExpand(job.jobPath)}
-                              onMouseOver={(e) => { if (!isExpanded) e.currentTarget.style.background = '#1a1a1a'; }}
+                              onMouseOver={(e) => { if (!isExpanded) e.currentTarget.style.background = t.rowHoverBg; }}
                               onMouseOut={(e) => { if (!isExpanded) e.currentTarget.style.background = 'transparent'; }}
                             >
                               <td style={{ padding: '0.6rem 0.5rem 0.6rem 2rem' }}>
-                                {isExpanded ? 
-                                  <ChevronDown size={12} style={{ color: '#666' }} /> : 
-                                  <ChevronRight size={12} style={{ color: '#666' }} />
+                                {isExpanded ?
+                                  <ChevronDown size={12} style={{ color: t.textDim }} /> :
+                                  <ChevronRight size={12} style={{ color: t.textDim }} />
                                 }
                               </td>
                               <td style={{ padding: '0.6rem 0.5rem' }}>
@@ -1201,7 +1291,7 @@ export default function ForgejoDashboard() {
                                   rel="noopener noreferrer"
                                   onClick={(e) => e.stopPropagation()}
                                   style={{
-                                    color: '#e5e5e5',
+                                    color: t.text,
                                     textDecoration: 'none',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -1210,13 +1300,13 @@ export default function ForgejoDashboard() {
                                   }}
                                 >
                                   {job.workflowName}
-                                  <ExternalLink size={12} style={{ color: '#444' }} />
+                                  <ExternalLink size={12} style={{ color: t.textDimmest }} />
                                 </a>
                               </td>
                               <td style={{ padding: '0.6rem 1rem', maxWidth: '250px' }}>
-                                <div style={{ 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
                                   gap: '0.5rem',
                                   fontSize: '0.75rem',
                                 }}>
@@ -1225,30 +1315,30 @@ export default function ForgejoDashboard() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
-                                    style={{ color: '#3b82f6', textDecoration: 'none', fontFamily: 'monospace' }}
+                                    style={{ color: t.linkColor, textDecoration: 'none', fontFamily: 'monospace' }}
                                   >
                                     {getCommitSha(latestRun)}
                                   </a>
-                                  <span style={{ 
-                                    color: '#888', 
-                                    overflow: 'hidden', 
-                                    textOverflow: 'ellipsis', 
+                                  <span style={{
+                                    color: t.textMuted,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
                                   }} title={getCommitMessage(latestRun)}>
                                     {truncateMessage(getCommitMessage(latestRun), 40)}
                                   </span>
                                 </div>
                               </td>
-                              <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: '#888' }}>
+                              <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: t.textMuted }}>
                                 {getAuthor(latestRun)}
                               </td>
-                              <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: '#666' }}>
+                              <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: t.textDim }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                   <GitBranch size={12} />
                                   {latestRun.head_branch || 'main'}
                                 </div>
                               </td>
-                              <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: '#666' }}>
+                              <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: t.textDim }}>
                                 {formatTimeAgo(latestRun.created_at)}
                               </td>
                               <td style={{ padding: '0.6rem 1rem' }}>
@@ -1279,26 +1369,26 @@ export default function ForgejoDashboard() {
                                 </div>
                               </td>
                             </tr>
-                            
+
                             {/* Expanded Detail Rows */}
                             {isExpanded && (
                               <>
-                                <tr style={{ background: '#0d0d0d' }}>
+                                <tr style={{ background: t.expandedBg }}>
                                   <td colSpan={8} style={{ padding: '0.5rem 1rem 0.25rem 2.5rem' }}>
-                                    <span style={{ fontSize: '0.65rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                    <span style={{ fontSize: '0.65rem', color: t.textDimmer, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                                       Recent Runs ({job.allRuns.length})
                                     </span>
                                   </td>
                                 </tr>
                                 {job.allRuns.slice(0, 10).map((run, i) => (
-                                  <RunDetailRow 
-                                    key={run.id || i} 
-                                    run={run} 
+                                  <RunDetailRow
+                                    key={run.id || i}
+                                    run={run}
                                     repoFullName={job.repoFullName}
                                     isFirst={i === 0}
                                   />
                                 ))}
-                                <tr style={{ background: '#0d0d0d', height: '8px' }}>
+                                <tr style={{ background: t.expandedBg, height: '8px' }}>
                                   <td colSpan={8}></td>
                                 </tr>
                               </>
@@ -1314,29 +1404,29 @@ export default function ForgejoDashboard() {
           )}
         </div>
       </div>
-      
+
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
-        
+
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
         }
-        
+
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-        
+
         * { box-sizing: border-box; }
-        
-        input::placeholder, textarea::placeholder { color: #444; }
-        
+
+        input::placeholder, textarea::placeholder { color: ${t.placeholderColor}; }
+
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0a0a0a; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #444; }
-        
+        ::-webkit-scrollbar-track { background: ${t.scrollTrack}; }
+        ::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: ${t.scrollThumbHover}; }
+
         table a:hover { text-decoration: underline !important; }
       `}</style>
     </div>
