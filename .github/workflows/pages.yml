@@ -7,35 +7,65 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy to gh-pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare site
+        run: |
+          mkdir -p _site
+
+          # Copy main page
+          cp forgejo-local.html _site/index.html
+          touch _site/.nojekyll
+
+          # Preserve any existing PR preview directories from gh-pages branch
+          if git fetch origin gh-pages 2>/dev/null; then
+            # Extract pr/ directories if they exist
+            git archive origin/gh-pages -- pr/ 2>/dev/null | tar -x -C _site/ 2>/dev/null || true
+          fi
+
+      - name: Update gh-pages branch state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Save the file from main
           cp forgejo-local.html /tmp/index.html
 
-          # Fetch gh-pages if it exists, otherwise create orphan
-          if git fetch origin gh-pages:gh-pages 2>/dev/null; then
-            git checkout gh-pages
+          if git show-ref --quiet refs/remotes/origin/gh-pages; then
+            git checkout -B gh-pages origin/gh-pages
           else
             git checkout --orphan gh-pages
             git rm -rf .
           fi
 
-          # Disable Jekyll processing (prevents 404 for static HTML)
           touch .nojekyll
-
-          # Update root index.html, preserve pr/ directories
           cp /tmp/index.html index.html
           git add .nojekyll index.html
-          git commit -m "Deploy main to GitHub Pages" --allow-empty
-          git push origin gh-pages
+          git diff --cached --quiet || git commit -m "Deploy main to GitHub Pages"
+          git push origin gh-pages || true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
