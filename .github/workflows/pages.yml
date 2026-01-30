@@ -6,35 +6,33 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
+  contents: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Prepare site
+      - name: Deploy to gh-pages
         run: |
-          mkdir _site
-          cp forgejo-local.html _site/index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+          # Save the file from main
+          cp forgejo-local.html /tmp/index.html
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          # Fetch gh-pages if it exists, otherwise create orphan
+          if git fetch origin gh-pages:gh-pages 2>/dev/null; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf .
+          fi
+
+          # Update root index.html, preserve pr/ directories
+          cp /tmp/index.html index.html
+          git add index.html
+          git commit -m "Deploy main to GitHub Pages" --allow-empty
+          git push origin gh-pages

@@ -1,0 +1,68 @@
+name: PR Preview Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Deploy preview to gh-pages
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          PREVIEW_DIR="pr/${PR_NUMBER}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Save the file from the PR branch
+          cp forgejo-local.html /tmp/index.html
+
+          # Fetch gh-pages if it exists, otherwise create it
+          git fetch origin gh-pages:gh-pages 2>/dev/null || git checkout --orphan gh-pages
+
+          git checkout gh-pages
+
+          # Create preview directory and copy file
+          mkdir -p "${PREVIEW_DIR}"
+          cp /tmp/index.html "${PREVIEW_DIR}/index.html"
+
+          git add "${PREVIEW_DIR}/index.html"
+          git commit -m "Deploy PR #${PR_NUMBER} preview" --allow-empty
+          git push origin gh-pages
+
+      - name: Comment preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const previewUrl = `https://${owner}.github.io/${repo}/pr/${prNumber}/`;
+            const body = `🔍 **Preview deployed!**\n\n${previewUrl}`;
+
+            // Check for existing bot comment to update instead of spamming
+            const comments = await github.rest.issues.listComments({
+              owner, repo, issue_number: prNumber
+            });
+            const botComment = comments.data.find(
+              c => c.user.type === 'Bot' && c.body.includes('Preview deployed')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: botComment.id, body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: prNumber, body
+              });
+            }
