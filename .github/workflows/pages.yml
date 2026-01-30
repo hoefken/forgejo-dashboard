@@ -31,8 +31,11 @@ jobs:
             git rm -rf .
           fi
 
+          # Disable Jekyll processing (prevents 404 for static HTML)
+          touch .nojekyll
+
           # Update root index.html, preserve pr/ directories
           cp /tmp/index.html index.html
-          git add index.html
+          git add .nojekyll index.html
           git commit -m "Deploy main to GitHub Pages" --allow-empty
           git push origin gh-pages
