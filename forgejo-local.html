@@ -473,14 +473,14 @@
                 <span style={{ fontSize: '0.8rem', fontWeight: 600, color: statusInfo.color }}>
                   {filteredAndGroupedJobs.length} Jobs
                   {overallStatus === 'success' && ' \u2014 All Passing'}
-                  {overallStatus === 'failure' && ` \u2014 ${filteredAndGroupedJobs.filter(j => j.latestRun.conclusion === 'failure').length} Failing`}
-                  {overallStatus === 'running' && ` \u2014 ${filteredAndGroupedJobs.filter(j => j.latestRun.status === 'running').length} Running`}
+                  {overallStatus === 'failure' && ` \u2014 ${filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.failure).length} Failing`}
+                  {overallStatus === 'running' && ` \u2014 ${filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.running).length} Running`}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '1rem', fontSize: '0.7rem', color: t.textMuted }}>
-                <span>\u2713 {filteredAndGroupedJobs.filter(j => j.latestRun.conclusion === 'success').length}</span>
-                <span style={{ color: '#ef4444' }}>\u2717 {filteredAndGroupedJobs.filter(j => j.latestRun.conclusion === 'failure').length}</span>
-                <span style={{ color: '#3b82f6' }}>\u25cf {filteredAndGroupedJobs.filter(j => j.latestRun.status === 'running').length}</span>
+                <span style={{ color: '#22c55e' }}>{'\u2713'} {filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.success).length}</span>
+                <span style={{ color: '#ef4444' }}>{'\u2717'} {filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.failure).length}</span>
+                <span style={{ color: '#3b82f6' }}>{'\u25cf'} {filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.running).length}</span>
               </div>
             </div>
           )}
@@ -562,7 +562,7 @@
 
             {/* Main Content */}
             <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto' }}>
-              {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '1rem', marginBottom: '1rem', color: '#fca5a5', fontSize: '0.85rem' }}>\u26a0\ufe0f {error}</div>}
+              {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '1rem', marginBottom: '1rem', color: '#fca5a5', fontSize: '0.85rem' }}>{'\u26a0\ufe0f'} {error}</div>}
 
               {!filteredAndGroupedJobs.length ? (
                 <div style={{ textAlign: 'center', padding: '4rem 2rem', color: t.textDimmest }}>
