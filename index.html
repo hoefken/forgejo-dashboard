@@ -161,8 +161,8 @@
       const [config, setConfig] = useState({
         baseUrl: '',
         token: '',
-        repoPattern: '.*amerigo.*',
-        workflowPattern: '(build|continuous-delivery|check|pw-e2e/(.*test)|update-amerigo-dependencies)',
+        repoPattern: '.*',
+        workflowPattern: '.*',
         branchPattern: '^main$',
         organizations: [],
       });
@@ -523,7 +523,7 @@
 
                 <div style={{ marginBottom: '1.25rem' }}>
                   <label style={{ display: 'block', fontSize: '0.7rem', color: t.textDimmer, marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Repository Pattern (Regex)</label>
-                  <input type="text" value={config.repoPattern} onChange={e => setConfig(p => ({ ...p, repoPattern: e.target.value }))} placeholder=".*amerigo.*" style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.borderLight}`, borderRadius: 4, padding: '0.6rem', color: '#f97316', fontSize: '0.8rem', fontFamily: 'monospace' }} />
+                  <input type="text" value={config.repoPattern} onChange={e => setConfig(p => ({ ...p, repoPattern: e.target.value }))} placeholder=".*" style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.borderLight}`, borderRadius: 4, padding: '0.6rem', color: '#f97316', fontSize: '0.8rem', fontFamily: 'monospace' }} />
                 </div>
 
                 <div style={{ marginBottom: '1.25rem' }}>
