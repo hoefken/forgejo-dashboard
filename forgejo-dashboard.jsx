@@ -92,6 +92,7 @@ export default function ForgejoDashboard() {
     token: '',
     repoPattern: '.*amerigo.*',
     workflowPattern: '(build|continuous-delivery|check|pw-e2e/(.*test)|update-amerigo-dependencies)',
+    branchPattern: '^main$',
     organizations: [],
   });
   
@@ -314,10 +315,19 @@ export default function ForgejoDashboard() {
     } catch (e) {
       workflowRegex = /.*/;
     }
-    
-    const filtered = allRuns.filter(run => 
-      workflowRegex.test(run._workflowName) || workflowRegex.test(run._jobPath)
-    );
+
+    let branchRegex;
+    try {
+      branchRegex = config.branchPattern ? new RegExp(config.branchPattern, 'i') : null;
+    } catch (e) {
+      branchRegex = null;
+    }
+
+    const filtered = allRuns.filter(run => {
+      const matchesWorkflow = workflowRegex.test(run._workflowName) || workflowRegex.test(run._jobPath);
+      const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
+      return matchesWorkflow && matchesBranch;
+    });
     
     const jobMap = new Map();
     
@@ -352,7 +362,7 @@ export default function ForgejoDashboard() {
     });
     
     return jobs;
-  }, [allRuns, config.workflowPattern]);
+  }, [allRuns, config.workflowPattern, config.branchPattern]);
 
   // Auto-refresh
   useEffect(() => {
@@ -901,7 +911,7 @@ export default function ForgejoDashboard() {
             </div>
             
             {/* Workflow Pattern */}
-            <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ marginBottom: '1.25rem' }}>
               <label style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -933,6 +943,48 @@ export default function ForgejoDashboard() {
                   resize: 'vertical',
                 }}
               />
+            </div>
+
+            {/* Branch Pattern */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontSize: '0.7rem',
+                color: '#555',
+                marginBottom: '0.4rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}>
+                <GitBranch size={12} />
+                Branch Pattern (Regex)
+              </label>
+              <input
+                type="text"
+                value={config.branchPattern}
+                onChange={(e) => setConfig(prev => ({ ...prev, branchPattern: e.target.value }))}
+                placeholder="^main$"
+                style={{
+                  width: '100%',
+                  background: '#0a0a0a',
+                  border: '1px solid #333',
+                  borderRadius: '4px',
+                  padding: '0.6rem',
+                  color: '#22d3ee',
+                  fontSize: '0.8rem',
+                  fontFamily: 'monospace',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <span style={{
+                display: 'block',
+                fontSize: '0.6rem',
+                color: '#444',
+                marginTop: '0.3rem',
+              }}>
+                Default: ^main$ (nur main-Branch). Leer lassen für alle Branches.
+              </span>
             </div>
             
             {/* Discover Button */}

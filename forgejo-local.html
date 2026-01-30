@@ -99,6 +99,7 @@
         token: '',
         repoPattern: '.*amerigo.*',
         workflowPattern: '(build|continuous-delivery|check|pw-e2e/(.*test)|update-amerigo-dependencies)',
+        branchPattern: '^main$',
         organizations: [],
       });
       
@@ -257,12 +258,18 @@
 
       const filteredAndGroupedJobs = useMemo(() => {
         let workflowRegex;
-        try { workflowRegex = new RegExp(config.workflowPattern, 'i'); } 
+        try { workflowRegex = new RegExp(config.workflowPattern, 'i'); }
         catch (e) { workflowRegex = /.*/; }
-        
+
+        let branchRegex;
+        try { branchRegex = config.branchPattern ? new RegExp(config.branchPattern, 'i') : null; }
+        catch (e) { branchRegex = null; }
+
         const filtered = allRuns.filter(run => {
           const wfName = getWorkflowName(run);
-          return workflowRegex.test(wfName) || workflowRegex.test(run._jobPath);
+          const matchesWorkflow = workflowRegex.test(wfName) || workflowRegex.test(run._jobPath);
+          const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
+          return matchesWorkflow && matchesBranch;
         });
         
         const jobMap = new Map();
@@ -290,7 +297,7 @@
           const sB = getStatus(b.latestRun.status, b.latestRun.conclusion);
           return sB.priority - sA.priority;
         });
-      }, [allRuns, config.workflowPattern]);
+      }, [allRuns, config.workflowPattern, config.branchPattern]);
 
       useEffect(() => {
         if (!discoveredRepos.length || !config.baseUrl || !autoRefresh) return;
@@ -434,9 +441,18 @@
                   <input type="text" value={config.repoPattern} onChange={e => setConfig(p => ({ ...p, repoPattern: e.target.value }))} placeholder=".*amerigo.*" style={{ width: '100%', background: '#0a0a0a', border: '1px solid #333', borderRadius: 4, padding: '0.6rem', color: '#f97316', fontSize: '0.8rem', fontFamily: 'monospace' }} />
                 </div>
                 
-                <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ marginBottom: '1.25rem' }}>
                   <label style={{ display: 'block', fontSize: '0.7rem', color: '#555', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Workflow Pattern (Regex)</label>
                   <textarea value={config.workflowPattern} onChange={e => setConfig(p => ({ ...p, workflowPattern: e.target.value }))} placeholder="(build|test)" rows={3} style={{ width: '100%', background: '#0a0a0a', border: '1px solid #333', borderRadius: 4, padding: '0.6rem', color: '#8b5cf6', fontSize: '0.8rem', fontFamily: 'monospace', resize: 'vertical' }} />
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', color: '#555', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <Icons.GitBranch width={12} height={12} />
+                    Branch Pattern (Regex)
+                  </label>
+                  <input type="text" value={config.branchPattern} onChange={e => setConfig(p => ({ ...p, branchPattern: e.target.value }))} placeholder="^main$" style={{ width: '100%', background: '#0a0a0a', border: '1px solid #333', borderRadius: 4, padding: '0.6rem', color: '#22d3ee', fontSize: '0.8rem', fontFamily: 'monospace' }} />
+                  <span style={{ display: 'block', fontSize: '0.6rem', color: '#444', marginTop: '0.3rem' }}>Default: ^main$ (nur main-Branch). Leer lassen für alle Branches.</span>
                 </div>
                 
                 <button onClick={discoverJobs} disabled={discovering || !config.baseUrl} style={{ width: '100%', background: 'linear-gradient(135deg, #f97316, #ea580c)', border: 'none', borderRadius: 6, padding: '0.75rem', color: 'white', cursor: discovering ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, opacity: discovering || !config.baseUrl ? 0.6 : 1 }}>
