@@ -87,11 +87,18 @@ const getStatus = (status, conclusion) => {
   return STATUS_MAP[status] || STATUS_MAP.unknown;
 };
 
+const isValidTimestamp = (ts) => {
+  if (!ts) return false;
+  const d = new Date(ts);
+  return !isNaN(d) && d.getFullYear() > 2000;
+};
+
 const formatDuration = (start, end) => {
-  if (!start) return '-';
+  if (!isValidTimestamp(start)) return '-';
   const startDate = new Date(start);
-  const endDate = end ? new Date(end) : new Date();
+  const endDate = isValidTimestamp(end) ? new Date(end) : new Date();
   const diff = Math.floor((endDate - startDate) / 1000);
+  if (diff < 0) return '-';
 
   if (diff < 60) return `${diff}s`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`;
@@ -616,7 +623,7 @@ export default function ForgejoDashboard() {
           {formatTimeAgo(run.created_at)}
         </td>
         <td style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', color: t.textDim }}>
-          {formatDuration(run.started_at, run.completed_at)}
+          {formatDuration(run.started_at || run.created_at, run.completed_at || run.updated_at)}
         </td>
         <td style={{ padding: '0.5rem 1rem' }}>
           <span style={{
@@ -1204,7 +1211,8 @@ export default function ForgejoDashboard() {
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500 }}>Last Commit</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '120px' }}>Author</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '100px' }}>Branch</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '100px' }}>Time</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '100px' }}>Last Build</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '100px' }}>Duration</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'center', color: t.textDim, fontWeight: 500, width: '100px' }}>History</th>
                   </tr>
                 </thead>
@@ -1220,7 +1228,7 @@ export default function ForgejoDashboard() {
                         }}
                         onClick={() => toggleRepoExpand(repoName)}
                       >
-                        <td colSpan={8} style={{ padding: '0.6rem 1rem' }}>
+                        <td colSpan={9} style={{ padding: '0.6rem 1rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             {expandedRepos.has(repoName) || expandedRepos.size === 0 ?
                               <ChevronDown size={14} style={{ color: t.textDim }} /> :
@@ -1341,6 +1349,9 @@ export default function ForgejoDashboard() {
                               <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: t.textDim }}>
                                 {formatTimeAgo(latestRun.created_at)}
                               </td>
+                              <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: t.textDim }}>
+                                {formatDuration(latestRun.started_at || latestRun.created_at, latestRun.completed_at || latestRun.updated_at)}
+                              </td>
                               <td style={{ padding: '0.6rem 1rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>
                                   {job.allRuns.slice(0, 8).map((run, i) => {
@@ -1374,7 +1385,7 @@ export default function ForgejoDashboard() {
                             {isExpanded && (
                               <>
                                 <tr style={{ background: t.expandedBg }}>
-                                  <td colSpan={8} style={{ padding: '0.5rem 1rem 0.25rem 2.5rem' }}>
+                                  <td colSpan={9} style={{ padding: '0.5rem 1rem 0.25rem 2.5rem' }}>
                                     <span style={{ fontSize: '0.65rem', color: t.textDimmer, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                                       Recent Runs ({job.allRuns.length})
                                     </span>
@@ -1389,7 +1400,7 @@ export default function ForgejoDashboard() {
                                   />
                                 ))}
                                 <tr style={{ background: t.expandedBg, height: '8px' }}>
-                                  <td colSpan={8}></td>
+                                  <td colSpan={9}></td>
                                 </tr>
                               </>
                             )}

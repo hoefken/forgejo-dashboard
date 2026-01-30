@@ -130,9 +130,18 @@
       return STATUS_MAP[status] || STATUS_MAP.unknown;
     };
 
+    const isValidTimestamp = (ts) => {
+      if (!ts) return false;
+      const d = new Date(ts);
+      return !isNaN(d) && d.getFullYear() > 2000;
+    };
+
     const formatDuration = (start, end) => {
-      if (!start) return '-';
-      const diff = Math.floor((new Date(end || Date.now()) - new Date(start)) / 1000);
+      if (!isValidTimestamp(start)) return '-';
+      const startDate = new Date(start);
+      const endDate = isValidTimestamp(end) ? new Date(end) : new Date();
+      const diff = Math.floor((endDate - startDate) / 1000);
+      if (diff < 0) return '-';
       if (diff < 60) return `${diff}s`;
       if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`;
       return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
@@ -606,7 +615,7 @@
                                   </a>
                                 </td>
                                 <td style={{ padding: '0.6rem 1rem', color: t.textDim }}>{formatTimeAgo(job.latestRun.created_at)}</td>
-                                <td style={{ padding: '0.6rem 1rem', color: t.textDim }}>{formatDuration(job.latestRun.started_at, job.latestRun.completed_at)}</td>
+                                <td style={{ padding: '0.6rem 1rem', color: t.textDim }}>{formatDuration(job.latestRun.started_at || job.latestRun.created_at, job.latestRun.completed_at || job.latestRun.updated_at)}</td>
                                 <td style={{ padding: '0.6rem 1rem' }}>
                                   <div style={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
                                     {job.allRuns.slice(0, 8).map((run, i) => {
