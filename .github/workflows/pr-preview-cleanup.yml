@@ -6,9 +6,17 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   cleanup:
+    environment:
+      name: github-pages
     runs-on: ubuntu-latest
     steps:
       - name: Checkout gh-pages
@@ -16,7 +24,10 @@ jobs:
         with:
           ref: gh-pages
 
-      - name: Remove preview
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Remove preview and prepare site
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
           PREVIEW_DIR="pr/${PR_NUMBER}"
@@ -29,3 +40,20 @@ jobs:
             git commit -m "Remove PR #${PR_NUMBER} preview"
             git push origin gh-pages
           fi
+
+          # Build deployment artifact from current state
+          mkdir -p _site
+          # Copy everything except git metadata
+          for f in $(git ls-files); do
+            mkdir -p "_site/$(dirname "$f")"
+            cp "$f" "_site/$f"
+          done
+          touch _site/.nojekyll
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
