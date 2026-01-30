@@ -87,11 +87,18 @@ const getStatus = (status, conclusion) => {
   return STATUS_MAP[status] || STATUS_MAP.unknown;
 };
 
+const isValidTimestamp = (ts) => {
+  if (!ts) return false;
+  const d = new Date(ts);
+  return !isNaN(d) && d.getFullYear() > 2000;
+};
+
 const formatDuration = (start, end) => {
-  if (!start) return '-';
+  if (!isValidTimestamp(start)) return '-';
   const startDate = new Date(start);
-  const endDate = end ? new Date(end) : new Date();
+  const endDate = isValidTimestamp(end) ? new Date(end) : new Date();
   const diff = Math.floor((endDate - startDate) / 1000);
+  if (diff < 0) return '-';
 
   if (diff < 60) return `${diff}s`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`;
