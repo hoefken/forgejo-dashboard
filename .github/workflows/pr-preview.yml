@@ -38,10 +38,13 @@ jobs:
             git rm -rf .
           fi
 
+          # Disable Jekyll processing (prevents 404 for static HTML)
+          touch .nojekyll
+
           mkdir -p "${PREVIEW_DIR}"
           cp /tmp/index.html "${PREVIEW_DIR}/index.html"
 
-          git add "${PREVIEW_DIR}/index.html"
+          git add .nojekyll "${PREVIEW_DIR}/index.html"
           git commit -m "Deploy PR #${PR_NUMBER} preview" --allow-empty
           git push origin gh-pages
 
