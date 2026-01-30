@@ -788,15 +788,15 @@ export default function ForgejoDashboard() {
             }}>
               {filteredAndGroupedJobs.length} Jobs
               {overallStatus === 'success' && ' — All Passing'}
-              {overallStatus === 'failure' && ` — ${filteredAndGroupedJobs.filter(j => j.latestRun.conclusion === 'failure').length} Failing`}
-              {overallStatus === 'running' && ` — ${filteredAndGroupedJobs.filter(j => j.latestRun.status === 'running').length} Running`}
+              {overallStatus === 'failure' && ` — ${filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.failure).length} Failing`}
+              {overallStatus === 'running' && ` — ${filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.running).length} Running`}
             </span>
           </div>
 
           <div style={{ display: 'flex', gap: '1rem', fontSize: '0.7rem', color: t.textMuted }}>
-            <span>✓ {filteredAndGroupedJobs.filter(j => j.latestRun.conclusion === 'success').length}</span>
-            <span style={{ color: '#ef4444' }}>✗ {filteredAndGroupedJobs.filter(j => j.latestRun.conclusion === 'failure').length}</span>
-            <span style={{ color: '#3b82f6' }}>● {filteredAndGroupedJobs.filter(j => j.latestRun.status === 'running').length}</span>
+            <span style={{ color: '#22c55e' }}>{'✓'} {filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.success).length}</span>
+            <span style={{ color: '#ef4444' }}>{'✗'} {filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.failure).length}</span>
+            <span style={{ color: '#3b82f6' }}>{'●'} {filteredAndGroupedJobs.filter(j => getStatus(j.latestRun.status, j.latestRun.conclusion) === STATUS_MAP.running).length}</span>
           </div>
         </div>
       )}
