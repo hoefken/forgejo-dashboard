@@ -52,7 +52,7 @@ Voraussetzungen:
 | **Forgejo URL** | Basis-URL der Instanz | `https://git.example.com` |
 | **API Token** | Persönlicher Access-Token | – |
 | **Organisationen** | Liste der zu scannenden Orgs | `my-org` |
-| **Repo Pattern** | Regex für Repository-Namen | `.*amerigo.*` |
+| **Repo Pattern** | Regex für Repository-Namen | `.*` |
 | **Workflow Pattern** | Regex für Workflow-Namen | `(build\|check\|deploy)` |
 | **Auto-Refresh** | Intervall in Sekunden (0 = aus) | `30` |
 

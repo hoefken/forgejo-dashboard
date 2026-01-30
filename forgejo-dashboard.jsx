@@ -157,8 +157,8 @@ export default function ForgejoDashboard() {
   const [config, setConfig] = useState({
     baseUrl: '',
     token: '',
-    repoPattern: '.*amerigo.*',
-    workflowPattern: '(build|continuous-delivery|check|pw-e2e/(.*test)|update-amerigo-dependencies)',
+    repoPattern: '.*',
+    workflowPattern: '.*',
     branchPattern: '^main$',
     organizations: [],
   });
@@ -985,7 +985,7 @@ export default function ForgejoDashboard() {
                 type="text"
                 value={config.repoPattern}
                 onChange={(e) => setConfig(prev => ({ ...prev, repoPattern: e.target.value }))}
-                placeholder=".*amerigo.*"
+                placeholder=".*"
                 style={{
                   width: '100%',
                   background: t.inputBg,
