@@ -1,7 +1,7 @@
 name: PR Preview Deploy
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions:
@@ -10,10 +10,15 @@ permissions:
 
 jobs:
   preview:
+    # Don't deploy previews for forks (security best practice)
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR
+      - name: Checkout PR head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Deploy preview to gh-pages
         run: |
@@ -23,11 +28,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Save the file from the PR branch
           cp forgejo-local.html /tmp/index.html
 
-          # Fetch gh-pages if it exists, otherwise create orphan
-          git fetch origin gh-pages:gh-pages 2>/dev/null
+          git fetch origin gh-pages:gh-pages 2>/dev/null || true
           if git show-ref --quiet refs/heads/gh-pages; then
             git checkout gh-pages
           else
@@ -35,7 +38,6 @@ jobs:
             git rm -rf .
           fi
 
-          # Create preview directory and copy file
           mkdir -p "${PREVIEW_DIR}"
           cp /tmp/index.html "${PREVIEW_DIR}/index.html"
 
@@ -53,7 +55,6 @@ jobs:
             const previewUrl = `https://${owner}.github.io/${repo}/pr/${prNumber}/`;
             const body = `🔍 **Preview deployed!**\n\n${previewUrl}`;
 
-            // Check for existing bot comment to update instead of spamming
             const comments = await github.rest.issues.listComments({
               owner, repo, issue_number: prNumber
             });
