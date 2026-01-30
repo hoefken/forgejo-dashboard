@@ -606,7 +606,7 @@
                                   </a>
                                 </td>
                                 <td style={{ padding: '0.6rem 1rem', color: t.textDim }}>{formatTimeAgo(job.latestRun.created_at)}</td>
-                                <td style={{ padding: '0.6rem 1rem', color: t.textDim }}>{formatDuration(job.latestRun.started_at, job.latestRun.completed_at)}</td>
+                                <td style={{ padding: '0.6rem 1rem', color: t.textDim }}>{formatDuration(job.latestRun.started_at || job.latestRun.created_at, job.latestRun.completed_at || job.latestRun.updated_at)}</td>
                                 <td style={{ padding: '0.6rem 1rem' }}>
                                   <div style={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
                                     {job.allRuns.slice(0, 8).map((run, i) => {
