@@ -213,31 +213,30 @@ export default function ForgejoDashboard() {
 
   const apiCall = useCallback(async (endpoint) => {
     const url = `${config.baseUrl}/api/v1${endpoint}`;
-    const headers = { 'Accept': 'application/json' };
-    if (config.token) {
-      headers['Authorization'] = `token ${config.token}`;
-    }
 
-    // Retry once on network error — CORS browser plugins sometimes need a
-    // a first request to prime their OPTIONS interception.
-    let lastErr;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // 1) Prefer Authorization header (required from Forgejo v13+).
+    // 2) Fall back to ?token= query param if the header fails due to CORS.
+    if (config.token) {
       try {
-        const response = await fetch(url, { headers });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+        const response = await fetch(url, {
+          headers: { 'Accept': 'application/json', 'Authorization': `token ${config.token}` },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         return response.json();
       } catch (err) {
-        lastErr = err;
-        if (err.name === 'TypeError' && attempt === 0) {
-          await new Promise(r => setTimeout(r, 500));
-          continue;
-        }
-        throw err;
+        if (err.name !== 'TypeError') throw err;
+        // Network/CORS error — fall back to query-parameter auth
+        const sep = endpoint.includes('?') ? '&' : '?';
+        const fallbackUrl = `${config.baseUrl}/api/v1${endpoint}${sep}token=${config.token}`;
+        const response = await fetch(fallbackUrl, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        return response.json();
       }
     }
-    throw lastErr;
+
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    return response.json();
   }, [config.baseUrl, config.token]);
 
   // Alle Repos einer Organisation abrufen
