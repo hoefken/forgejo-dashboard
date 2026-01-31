@@ -264,8 +264,10 @@ export default function ForgejoDashboard() {
   // Workflow Runs für ein Repo abrufen
   const fetchRepoRuns = useCallback(async (owner, repo) => {
     try {
-      const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?limit=20`);
-      return data.workflow_runs || data || [];
+      const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=1&limit=10`);
+      const runs = data.workflow_runs || data || [];
+      // Strip bulky nested repository object to reduce memory usage
+      return runs.map(({ repository, ...run }) => run);
     } catch (err) {
       if (!err.message.includes('404')) {
         addLog(`⚠️ Runs für ${owner}/${repo}: ${err.message}`);
