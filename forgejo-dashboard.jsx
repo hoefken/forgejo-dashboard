@@ -213,30 +213,28 @@ export default function ForgejoDashboard() {
 
   const apiCall = useCallback(async (endpoint) => {
     const url = `${config.baseUrl}/api/v1${endpoint}`;
-
-    // Prefer Authorization header (required from Forgejo v13+).
-    // Fall back to query-parameter token when the preflight is blocked
-    // by a CORS configuration that does not allow the Authorization header.
+    const headers = { 'Accept': 'application/json' };
     if (config.token) {
-      try {
-        const response = await fetch(url, {
-          headers: { 'Accept': 'application/json', 'Authorization': `token ${config.token}` },
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        return response.json();
-      } catch (err) {
-        if (err.name !== 'TypeError') throw err;
-        // TypeError / NetworkError → likely CORS preflight rejection, retry with query param
-        const sep = url.includes('?') ? '&' : '?';
-        const fallbackUrl = `${url}${sep}token=${config.token}`;
-        const response = await fetch(fallbackUrl, { headers: { 'Accept': 'application/json' } });
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        return response.json();
-      }
+      headers['Authorization'] = `token ${config.token}`;
     }
 
-    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    let response;
+    try {
+      response = await fetch(url, { headers });
+    } catch (err) {
+      if (config.token && err.name === 'TypeError') {
+        throw new Error(
+          'Network error (CORS preflight likely blocked). ' +
+          'Add "Authorization" to [cors] HEADERS in your Forgejo app.ini.'
+        );
+      }
+      throw err;
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
     return response.json();
   }, [config.baseUrl, config.token]);
 
