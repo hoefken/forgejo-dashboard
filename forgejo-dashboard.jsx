@@ -287,7 +287,6 @@ export default function ForgejoDashboard() {
   const fetchRepoRuns = useCallback(async (owner, repo) => {
     try {
       const allRuns = [];
-      const seenWorkflows = new Set();
       const PAGE_LIMIT = 50;
       const MAX_PAGES = 5;
 
@@ -296,14 +295,10 @@ export default function ForgejoDashboard() {
         const runs = data.workflow_runs || data || [];
         if (runs.length === 0) break;
 
-        const prevCount = seenWorkflows.size;
         for (const run of runs) {
           allRuns.push(normalizeRun(run));
-          seenWorkflows.add(getWorkflowName(run));
         }
 
-        // Stop if this page brought no new workflows and we already have enough data
-        if (seenWorkflows.size === prevCount && page > 1) break;
         // Stop if page was not full (no more data)
         if (runs.length < PAGE_LIMIT) break;
       }
