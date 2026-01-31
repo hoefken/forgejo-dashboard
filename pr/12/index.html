@@ -209,26 +209,28 @@
 
       const apiCall = useCallback(async (endpoint) => {
         const url = `${config.baseUrl}/api/v1${endpoint}`;
-        const headers = { 'Accept': 'application/json' };
-        if (config.token) headers['Authorization'] = `token ${config.token}`;
-        // Retry once on network error — CORS browser plugins sometimes need
-        // a first request to prime their OPTIONS interception.
-        let lastErr;
-        for (let attempt = 0; attempt < 2; attempt++) {
+        // 1) Prefer Authorization header (required from Forgejo v13+).
+        // 2) Fall back to ?token= query param if the header fails due to CORS.
+        if (config.token) {
           try {
-            const res = await fetch(url, { headers });
+            const res = await fetch(url, {
+              headers: { 'Accept': 'application/json', 'Authorization': `token ${config.token}` },
+            });
             if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
             return res.json();
           } catch (err) {
-            lastErr = err;
-            if (err.name === 'TypeError' && attempt === 0) {
-              await new Promise(r => setTimeout(r, 500));
-              continue;
-            }
-            throw err;
+            if (err.name !== 'TypeError') throw err;
+            const sep = endpoint.includes('?') ? '&' : '?';
+            const res = await fetch(`${config.baseUrl}/api/v1${endpoint}${sep}token=${config.token}`, {
+              headers: { 'Accept': 'application/json' },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            return res.json();
           }
         }
-        throw lastErr;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        return res.json();
       }, [config.baseUrl, config.token]);
 
       const fetchOrgRepos = useCallback(async (org) => {
