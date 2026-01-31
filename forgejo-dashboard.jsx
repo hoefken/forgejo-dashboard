@@ -129,18 +129,17 @@ const truncateMessage = (msg, maxLength = 60) => {
   return firstLine.substring(0, maxLength) + '...';
 };
 
-// Author extrahieren
+// Author extrahieren (Forgejo returns actor/trigger_actor User objects, no head_commit)
 const getAuthor = (run) => {
-  if (run.head_commit?.author?.name) return run.head_commit.author.name;
-  if (run.head_commit?.author?.login) return run.head_commit.author.login;
+  if (run.actor?.full_name) return run.actor.full_name;
   if (run.actor?.login) return run.actor.login;
+  if (run.trigger_actor?.full_name) return run.trigger_actor.full_name;
   if (run.trigger_actor?.login) return run.trigger_actor.login;
   return '-';
 };
 
-// Commit Message extrahieren
+// Commit Message extrahieren (Forgejo uses display_title/title, no head_commit)
 const getCommitMessage = (run) => {
-  if (run.head_commit?.message) return run.head_commit.message;
   if (run.display_title) return run.display_title;
   if (run.title) return run.title;
   return '-';
@@ -149,7 +148,7 @@ const getCommitMessage = (run) => {
 // Commit SHA extrahieren
 const getCommitSha = (run) => {
   if (run.head_sha) return run.head_sha.substring(0, 7);
-  if (run.head_commit?.id) return run.head_commit.id.substring(0, 7);
+  if (run.commit_sha) return run.commit_sha.substring(0, 7);
   return '-';
 };
 
@@ -279,10 +278,12 @@ export default function ForgejoDashboard() {
     return {
       ...rest,
       head_branch: run.head_branch || run.prettyref,
+      head_sha: run.head_sha || run.commit_sha,
       created_at: run.created_at || run.created,
       started_at: run.started_at || run.started,
       completed_at: run.completed_at || run.completed || run.stopped,
       run_number: run.run_number || run.index_in_repo,
+      trigger_actor: run.trigger_actor || run.trigger_user,
     };
   };
 
@@ -612,7 +613,7 @@ export default function ForgejoDashboard() {
           }}>
             <GitCommit size={12} style={{ color: t.textDim, flexShrink: 0 }} />
             <a
-              href={`${config.baseUrl}/${repoFullName}/commit/${run.head_sha || run.head_commit?.id}`}
+              href={`${config.baseUrl}/${repoFullName}/commit/${run.head_sha}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: t.linkColor, textDecoration: 'none', fontFamily: 'monospace' }}
