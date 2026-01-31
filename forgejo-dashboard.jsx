@@ -400,7 +400,7 @@ export default function ForgejoDashboard() {
   const filteredAndGroupedJobs = useMemo(() => {
     let workflowRegex;
     try {
-      workflowRegex = new RegExp(config.workflowPattern, 'i');
+      workflowRegex = config.workflowPattern ? new RegExp(config.workflowPattern, 'i') : /.*/;
     } catch (e) {
       workflowRegex = /.*/;
     }

@@ -350,7 +350,7 @@
 
       const filteredAndGroupedJobs = useMemo(() => {
         let workflowRegex;
-        try { workflowRegex = new RegExp(config.workflowPattern, 'i'); }
+        try { workflowRegex = config.workflowPattern ? new RegExp(config.workflowPattern, 'i') : /.*/; }
         catch (e) { workflowRegex = /.*/; }
 
         let branchRegex;
