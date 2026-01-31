@@ -209,9 +209,24 @@
 
       const apiCall = useCallback(async (endpoint) => {
         const url = `${config.baseUrl}/api/v1${endpoint}`;
-        const headers = { 'Accept': 'application/json' };
-        if (config.token) headers['Authorization'] = `token ${config.token}`;
-        const res = await fetch(url, { headers });
+        // Prefer Authorization header (required from Forgejo v13+).
+        // Fall back to query-parameter token when CORS preflight is blocked.
+        if (config.token) {
+          try {
+            const res = await fetch(url, {
+              headers: { 'Accept': 'application/json', 'Authorization': `token ${config.token}` },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            return res.json();
+          } catch (err) {
+            if (err.name !== 'TypeError') throw err;
+            const sep = url.includes('?') ? '&' : '?';
+            const res = await fetch(`${url}${sep}token=${config.token}`, { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            return res.json();
+          }
+        }
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         return res.json();
       }, [config.baseUrl, config.token]);

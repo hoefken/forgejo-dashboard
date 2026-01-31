@@ -213,17 +213,30 @@ export default function ForgejoDashboard() {
 
   const apiCall = useCallback(async (endpoint) => {
     const url = `${config.baseUrl}/api/v1${endpoint}`;
-    const headers = { 'Accept': 'application/json' };
+
+    // Prefer Authorization header (required from Forgejo v13+).
+    // Fall back to query-parameter token when the preflight is blocked
+    // by a CORS configuration that does not allow the Authorization header.
     if (config.token) {
-      headers['Authorization'] = `token ${config.token}`;
+      try {
+        const response = await fetch(url, {
+          headers: { 'Accept': 'application/json', 'Authorization': `token ${config.token}` },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        return response.json();
+      } catch (err) {
+        if (err.name !== 'TypeError') throw err;
+        // TypeError / NetworkError → likely CORS preflight rejection, retry with query param
+        const sep = url.includes('?') ? '&' : '?';
+        const fallbackUrl = `${url}${sep}token=${config.token}`;
+        const response = await fetch(fallbackUrl, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        return response.json();
+      }
     }
 
-    const response = await fetch(url, { headers });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     return response.json();
   }, [config.baseUrl, config.token]);
 
