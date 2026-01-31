@@ -280,6 +280,8 @@ export default function ForgejoDashboard() {
       ...rest,
       head_branch: run.head_branch || run.prettyref,
       created_at: run.created_at || run.created,
+      started_at: run.started_at || run.started,
+      completed_at: run.completed_at || run.completed || run.stopped,
       run_number: run.run_number || run.index_in_repo,
     };
   };
@@ -1288,6 +1290,7 @@ export default function ForgejoDashboard() {
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '120px' }}>Author</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '100px' }}>Branch</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '100px' }}>Time</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: t.textDim, fontWeight: 500, width: '90px' }}>Duration</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'center', color: t.textDim, fontWeight: 500, width: '100px' }}>History</th>
                   </tr>
                 </thead>
@@ -1303,7 +1306,7 @@ export default function ForgejoDashboard() {
                         }}
                         onClick={() => toggleRepoExpand(repoName)}
                       >
-                        <td colSpan={8} style={{ padding: '0.6rem 1rem' }}>
+                        <td colSpan={9} style={{ padding: '0.6rem 1rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             {expandedRepos.has(repoName) || expandedRepos.size === 0 ?
                               <ChevronDown size={14} style={{ color: t.textDim }} /> :
@@ -1424,6 +1427,9 @@ export default function ForgejoDashboard() {
                               <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: t.textDim }}>
                                 {formatTimeAgo(latestRun.created_at)}
                               </td>
+                              <td style={{ padding: '0.6rem 1rem', fontSize: '0.75rem', color: t.textDim }}>
+                                {formatDuration(latestRun.started_at, latestRun.completed_at)}
+                              </td>
                               <td style={{ padding: '0.6rem 1rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>
                                   {job.allRuns.slice(0, 8).map((run, i) => {
@@ -1457,7 +1463,7 @@ export default function ForgejoDashboard() {
                             {isExpanded && (
                               <>
                                 <tr style={{ background: t.expandedBg }}>
-                                  <td colSpan={8} style={{ padding: '0.5rem 1rem 0.25rem 2.5rem' }}>
+                                  <td colSpan={9} style={{ padding: '0.5rem 1rem 0.25rem 2.5rem' }}>
                                     <span style={{ fontSize: '0.65rem', color: t.textDimmer, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                                       Recent Runs ({job.allRuns.length})
                                     </span>
@@ -1472,7 +1478,7 @@ export default function ForgejoDashboard() {
                                   />
                                 ))}
                                 <tr style={{ background: t.expandedBg, height: '8px' }}>
-                                  <td colSpan={8}></td>
+                                  <td colSpan={9}></td>
                                 </tr>
                               </>
                             )}
