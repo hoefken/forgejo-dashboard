@@ -277,7 +277,6 @@ export default function ForgejoDashboard() {
     const { repository, ...rest } = run;
     return {
       ...rest,
-      name: run.name || run.title,
       head_branch: run.head_branch || run.prettyref,
       created_at: run.created_at || run.created,
       run_number: run.run_number || run.index_in_repo,
