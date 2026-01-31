@@ -272,13 +272,34 @@ export default function ForgejoDashboard() {
     }
   }, [apiCall]);
 
-  // Workflow Runs für ein Repo abrufen
+  // Workflow Runs für ein Repo abrufen (paginiert bis alle Workflows abgedeckt sind)
   const fetchRepoRuns = useCallback(async (owner, repo) => {
     try {
-      const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=1&limit=50`);
-      const runs = data.workflow_runs || data || [];
-      // Strip bulky nested repository object to reduce memory usage
-      return runs.map(({ repository, ...run }) => run);
+      const allRuns = [];
+      const seenWorkflows = new Set();
+      const PAGE_LIMIT = 50;
+      const MAX_PAGES = 5;
+
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
+        const runs = data.workflow_runs || data || [];
+        if (runs.length === 0) break;
+
+        const prevCount = seenWorkflows.size;
+        for (const run of runs) {
+          // Strip bulky nested repository object to reduce memory usage
+          const { repository, ...stripped } = run;
+          allRuns.push(stripped);
+          seenWorkflows.add(getWorkflowName(run));
+        }
+
+        // Stop if this page brought no new workflows and we already have enough data
+        if (seenWorkflows.size === prevCount && page > 1) break;
+        // Stop if page was not full (no more data)
+        if (runs.length < PAGE_LIMIT) break;
+      }
+
+      return allRuns;
     } catch (err) {
       if (!err.message.includes('404')) {
         addLog(`⚠️ Runs für ${owner}/${repo}: ${err.message}`);
