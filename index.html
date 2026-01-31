@@ -208,8 +208,26 @@
       const addLog = (msg) => setDiscoveryLog(prev => [...prev.slice(-50), `${new Date().toLocaleTimeString()} - ${msg}`]);
 
       const apiCall = useCallback(async (endpoint) => {
-        const sep = endpoint.includes('?') ? '&' : '?';
-        const url = `${config.baseUrl}/api/v1${endpoint}${config.token ? `${sep}token=${config.token}` : ''}`;
+        const url = `${config.baseUrl}/api/v1${endpoint}`;
+        // 1) Prefer Authorization header (required from Forgejo v13+).
+        // 2) Fall back to ?token= query param if the header fails due to CORS.
+        if (config.token) {
+          try {
+            const res = await fetch(url, {
+              headers: { 'Accept': 'application/json', 'Authorization': `token ${config.token}` },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            return res.json();
+          } catch (err) {
+            if (err.name !== 'TypeError') throw err;
+            const sep = endpoint.includes('?') ? '&' : '?';
+            const res = await fetch(`${config.baseUrl}/api/v1${endpoint}${sep}token=${config.token}`, {
+              headers: { 'Accept': 'application/json' },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            return res.json();
+          }
+        }
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         return res.json();
