@@ -160,6 +160,7 @@ export default function ForgejoDashboard() {
     repoPattern: '.*',
     workflowPattern: '.*',
     branchPattern: '^main$',
+    maxRuns: 250,
     organizations: [],
   });
 
@@ -288,7 +289,8 @@ export default function ForgejoDashboard() {
     try {
       const allRuns = [];
       const PAGE_LIMIT = 50;
-      const MAX_PAGES = 5;
+      const maxRuns = config.maxRuns || 250;
+      const MAX_PAGES = Math.ceil(maxRuns / PAGE_LIMIT);
 
       for (let page = 1; page <= MAX_PAGES; page++) {
         const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
@@ -310,7 +312,7 @@ export default function ForgejoDashboard() {
       }
       return [];
     }
-  }, [apiCall]);
+  }, [apiCall, config.maxRuns]);
 
   // Discovery: Alle Repos und deren Runs finden
   const discoverJobs = useCallback(async () => {
@@ -1112,6 +1114,49 @@ export default function ForgejoDashboard() {
                 marginTop: '0.3rem',
               }}>
                 Default: ^main$ (nur main-Branch). Leer lassen für alle Branches.
+              </span>
+            </div>
+
+            {/* Max Runs */}
+            <div>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontSize: '0.7rem',
+                color: t.textDim,
+                marginBottom: '0.4rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}>
+                Max Runs per Repo
+              </label>
+              <input
+                type="number"
+                min="50"
+                step="50"
+                value={config.maxRuns || 250}
+                onChange={(e) => setConfig(prev => ({ ...prev, maxRuns: parseInt(e.target.value) || 250 }))}
+                placeholder="250"
+                style={{
+                  width: '100%',
+                  background: t.inputBg,
+                  border: `1px solid ${t.borderLight}`,
+                  borderRadius: '4px',
+                  padding: '0.6rem',
+                  color: '#22d3ee',
+                  fontSize: '0.8rem',
+                  fontFamily: 'monospace',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <span style={{
+                display: 'block',
+                fontSize: '0.6rem',
+                color: t.textDimmest,
+                marginTop: '0.3rem',
+              }}>
+                Maximale Anzahl Runs pro Repo (in 50er-Schritten). Höher = mehr Workflows sichtbar, aber langsamer.
               </span>
             </div>
 
