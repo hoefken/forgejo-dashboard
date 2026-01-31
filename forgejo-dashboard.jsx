@@ -212,19 +212,30 @@ export default function ForgejoDashboard() {
   };
 
   const apiCall = useCallback(async (endpoint) => {
-    // Token als Query-Parameter anhängen (Forgejo/Gitea Style)
-    const separator = endpoint.includes('?') ? '&' : '?';
-    const tokenParam = config.token ? `${separator}token=${config.token}` : '';
-    const url = `${config.baseUrl}/api/v1${endpoint}${tokenParam}`;
+    const url = `${config.baseUrl}/api/v1${endpoint}`;
 
-    const response = await fetch(url, {
-      headers: { 'Accept': 'application/json' }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    // 1) Prefer Authorization header (required from Forgejo v13+).
+    // 2) Fall back to ?token= query param if the header fails due to CORS.
+    if (config.token) {
+      try {
+        const response = await fetch(url, {
+          headers: { 'Accept': 'application/json', 'Authorization': `token ${config.token}` },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        return response.json();
+      } catch (err) {
+        if (err.name !== 'TypeError') throw err;
+        // Network/CORS error — fall back to query-parameter auth
+        const sep = endpoint.includes('?') ? '&' : '?';
+        const fallbackUrl = `${config.baseUrl}/api/v1${endpoint}${sep}token=${config.token}`;
+        const response = await fetch(fallbackUrl, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        return response.json();
+      }
     }
 
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     return response.json();
   }, [config.baseUrl, config.token]);
 
