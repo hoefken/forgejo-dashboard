@@ -218,24 +218,26 @@ export default function ForgejoDashboard() {
       headers['Authorization'] = `token ${config.token}`;
     }
 
-    let response;
-    try {
-      response = await fetch(url, { headers });
-    } catch (err) {
-      if (config.token && err.name === 'TypeError') {
-        throw new Error(
-          'Network error (CORS preflight likely blocked). ' +
-          'Add "Authorization" to [cors] HEADERS in your Forgejo app.ini.'
-        );
+    // Retry once on network error — CORS browser plugins sometimes need a
+    // a first request to prime their OPTIONS interception.
+    let lastErr;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+      } catch (err) {
+        lastErr = err;
+        if (err.name === 'TypeError' && attempt === 0) {
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        throw err;
       }
-      throw err;
     }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return response.json();
+    throw lastErr;
   }, [config.baseUrl, config.token]);
 
   // Alle Repos einer Organisation abrufen
