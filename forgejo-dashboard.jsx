@@ -272,6 +272,18 @@ export default function ForgejoDashboard() {
     }
   }, [apiCall]);
 
+  // Normalize Forgejo API field names to what the UI code expects
+  const normalizeRun = (run) => {
+    const { repository, ...rest } = run;
+    return {
+      ...rest,
+      name: run.name || run.title,
+      head_branch: run.head_branch || run.prettyref,
+      created_at: run.created_at || run.created,
+      run_number: run.run_number || run.index_in_repo,
+    };
+  };
+
   // Workflow Runs für ein Repo abrufen (paginiert bis alle Workflows abgedeckt sind)
   const fetchRepoRuns = useCallback(async (owner, repo) => {
     try {
@@ -287,9 +299,7 @@ export default function ForgejoDashboard() {
 
         const prevCount = seenWorkflows.size;
         for (const run of runs) {
-          // Strip bulky nested repository object to reduce memory usage
-          const { repository, ...stripped } = run;
-          allRuns.push(stripped);
+          allRuns.push(normalizeRun(run));
           seenWorkflows.add(getWorkflowName(run));
         }
 
