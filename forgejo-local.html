@@ -208,9 +208,10 @@
       const addLog = (msg) => setDiscoveryLog(prev => [...prev.slice(-50), `${new Date().toLocaleTimeString()} - ${msg}`]);
 
       const apiCall = useCallback(async (endpoint) => {
-        const sep = endpoint.includes('?') ? '&' : '?';
-        const url = `${config.baseUrl}/api/v1${endpoint}${config.token ? `${sep}token=${config.token}` : ''}`;
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const url = `${config.baseUrl}/api/v1${endpoint}`;
+        const headers = { 'Accept': 'application/json' };
+        if (config.token) headers['Authorization'] = `token ${config.token}`;
+        const res = await fetch(url, { headers });
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         return res.json();
       }, [config.baseUrl, config.token]);

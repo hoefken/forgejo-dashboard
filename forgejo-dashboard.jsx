@@ -212,14 +212,13 @@ export default function ForgejoDashboard() {
   };
 
   const apiCall = useCallback(async (endpoint) => {
-    // Token als Query-Parameter anhängen (Forgejo/Gitea Style)
-    const separator = endpoint.includes('?') ? '&' : '?';
-    const tokenParam = config.token ? `${separator}token=${config.token}` : '';
-    const url = `${config.baseUrl}/api/v1${endpoint}${tokenParam}`;
+    const url = `${config.baseUrl}/api/v1${endpoint}`;
+    const headers = { 'Accept': 'application/json' };
+    if (config.token) {
+      headers['Authorization'] = `token ${config.token}`;
+    }
 
-    const response = await fetch(url, {
-      headers: { 'Accept': 'application/json' }
-    });
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);

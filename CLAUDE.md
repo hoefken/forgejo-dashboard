@@ -35,7 +35,7 @@ Both variants share the same core logic:
 
 ## Important patterns
 
-- API token is passed as a query parameter (`?token=...`)
+- API token is passed via the `Authorization: token <token>` header (AuthorizationHeaderToken)
 - Pagination uses `limit=50` per page
 - `filteredAndGroupedJobs` is the central `useMemo` that processes all run data
 - Status priority sort order: failure → running → waiting → pending → success → cancelled/skipped
