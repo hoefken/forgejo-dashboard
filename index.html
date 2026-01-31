@@ -164,6 +164,7 @@
         repoPattern: '.*',
         workflowPattern: '.*',
         branchPattern: '^main$',
+        maxRuns: 250,
         organizations: [],
       });
 
@@ -261,17 +262,42 @@
         }
       }, [apiCall]);
 
+      // Normalize Forgejo API field names to what the UI code expects
+      const normalizeRun = (run) => {
+        const { repository, ...rest } = run;
+        return {
+          ...rest,
+          head_branch: run.head_branch || run.prettyref,
+          created_at: run.created_at || run.created,
+          run_number: run.run_number || run.index_in_repo,
+        };
+      };
+
       const fetchRepoRuns = useCallback(async (owner, repo) => {
         try {
-          const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=1&limit=10`);
-          const runs = data.workflow_runs || data || [];
-          // Strip bulky nested repository object to reduce memory usage
-          return runs.map(({ repository, ...run }) => run);
+          const allRuns = [];
+          const PAGE_LIMIT = 50;
+          const maxRuns = config.maxRuns || 250;
+          const MAX_PAGES = Math.ceil(maxRuns / PAGE_LIMIT);
+
+          for (let page = 1; page <= MAX_PAGES; page++) {
+            const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
+            const runs = data.workflow_runs || data || [];
+            if (runs.length === 0) break;
+
+            for (const run of runs) {
+              allRuns.push(normalizeRun(run));
+            }
+
+            if (runs.length < PAGE_LIMIT) break;
+          }
+
+          return allRuns;
         } catch (err) {
           if (!err.message.includes('404')) addLog(`\u26a0\ufe0f Runs f\u00fcr ${owner}/${repo}: ${err.message}`);
           return [];
         }
-      }, [apiCall]);
+      }, [apiCall, config.maxRuns]);
 
       const discoverJobs = useCallback(async () => {
         if (!config.baseUrl) return;
@@ -350,7 +376,7 @@
 
       const filteredAndGroupedJobs = useMemo(() => {
         let workflowRegex;
-        try { workflowRegex = new RegExp(config.workflowPattern, 'i'); }
+        try { workflowRegex = config.workflowPattern ? new RegExp(config.workflowPattern, 'i') : /.*/; }
         catch (e) { workflowRegex = /.*/; }
 
         let branchRegex;
@@ -558,6 +584,14 @@
                   </label>
                   <input type="text" value={config.branchPattern} onChange={e => setConfig(p => ({ ...p, branchPattern: e.target.value }))} placeholder="^main$" style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.borderLight}`, borderRadius: 4, padding: '0.6rem', color: '#22d3ee', fontSize: '0.8rem', fontFamily: 'monospace' }} />
                   <span style={{ display: 'block', fontSize: '0.6rem', color: t.textDimmest, marginTop: '0.3rem' }}>Default: ^main$ (nur main-Branch). Leer lassen f&uuml;r alle Branches.</span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', color: t.textDim, marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Max Runs per Repo
+                  </label>
+                  <input type="number" min="50" step="50" value={config.maxRuns || 250} onChange={e => setConfig(p => ({ ...p, maxRuns: parseInt(e.target.value) || 250 }))} placeholder="250" style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.borderLight}`, borderRadius: 4, padding: '0.6rem', color: '#22d3ee', fontSize: '0.8rem', fontFamily: 'monospace' }} />
+                  <span style={{ display: 'block', fontSize: '0.6rem', color: t.textDimmest, marginTop: '0.3rem' }}>Max Runs pro Repo (in 50er-Schritten). H&ouml;her = mehr Workflows sichtbar, aber langsamer.</span>
                 </div>
 
                 <button onClick={discoverJobs} disabled={discovering || !config.baseUrl} style={{ width: '100%', background: 'linear-gradient(135deg, #f97316, #ea580c)', border: 'none', borderRadius: 6, padding: '0.75rem', color: 'white', cursor: discovering ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, opacity: discovering || !config.baseUrl ? 0.6 : 1 }}>
