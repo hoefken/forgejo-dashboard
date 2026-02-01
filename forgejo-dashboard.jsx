@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, PlayCircle, Settings, Search, Trash2, ExternalLink, GitBranch, Activity, Filter, Regex, FolderSearch, ChevronDown, ChevronRight, User, GitCommit, MessageSquare, Sun, Moon } from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, PlayCircle, Play, Settings, Search, Trash2, ExternalLink, GitBranch, Activity, Filter, Regex, FolderSearch, ChevronDown, ChevronRight, User, GitCommit, MessageSquare, Sun, Moon } from 'lucide-react';
 
 // Status mapping für Forgejo Actions
 const STATUS_MAP = {
@@ -168,6 +168,7 @@ export default function ForgejoDashboard() {
   const [loading, setLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [error, setError] = useState(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0, phase: 'idle' });
   const [showSettings, setShowSettings] = useState(() => {
     try { const p = JSON.parse(localStorage.getItem('forgejo-dashboard-ui-prefs')); return p?.showSettings ?? true; } catch { return true; }
   });
@@ -301,7 +302,7 @@ export default function ForgejoDashboard() {
   };
 
   // Workflow Runs für ein Repo abrufen (paginiert bis alle Workflows abgedeckt sind)
-  const fetchRepoRuns = useCallback(async (owner, repo) => {
+  const fetchRepoRuns = useCallback(async (owner, repo, onProgress) => {
     try {
       const allRuns = [];
       const PAGE_LIMIT = 50;
@@ -316,6 +317,8 @@ export default function ForgejoDashboard() {
         for (const run of runs) {
           allRuns.push(normalizeRun(run));
         }
+
+        if (onProgress) onProgress(allRuns.length);
 
         // Stop if page was not full (no more data)
         if (runs.length < PAGE_LIMIT) break;
@@ -332,16 +335,25 @@ export default function ForgejoDashboard() {
 
   // Discovery: Alle Repos und deren Runs finden
   const discoverJobs = useCallback(async () => {
-    if (!config.baseUrl) return;
+    if (!config.baseUrl || discovering) return;
 
     setDiscovering(true);
     setDiscoveryLog([]);
     setError(null);
+    setProgress({ current: 0, total: config.organizations.length, phase: 'discovering' });
+
+    const timeout = setTimeout(() => {
+      setDiscovering(false);
+      setProgress(p => ({ ...p, phase: 'idle' }));
+      setError('Discovery timed out after 60 seconds');
+    }, 60000);
 
     try {
       let allRepos = [];
 
-      for (const org of config.organizations) {
+      for (let i = 0; i < config.organizations.length; i++) {
+        const org = config.organizations[i];
+        setProgress({ current: i + 1, total: config.organizations.length, phase: 'discovering' });
         addLog(`🔍 Durchsuche Organisation: ${org}`);
         const repos = await fetchOrgRepos(org);
         addLog(`   → ${repos.length} Repos gefunden`);
@@ -381,11 +393,20 @@ export default function ForgejoDashboard() {
       setDiscoveredRepos(matchingRepos);
 
       const allRunsCollected = [];
+      const maxRuns = config.maxRuns || 250;
+      const totalMaxRuns = matchingRepos.length * maxRuns;
+      let runsFetched = 0;
 
-      for (const repo of matchingRepos) {
+      for (let i = 0; i < matchingRepos.length; i++) {
+        const repo = matchingRepos[i];
+        setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
         addLog(`📥 Lade Runs für: ${repo.full_name}`);
-        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
+        const baseRunsFetched = runsFetched;
+        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+          setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'fetching' });
+        });
 
+        runsFetched += runs.length;
         const enrichedRuns = runs.map(run => ({
           ...run,
           _repo: repo,
@@ -397,6 +418,7 @@ export default function ForgejoDashboard() {
         allRunsCollected.push(...enrichedRuns);
       }
 
+      setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
       addLog(`✅ Insgesamt ${allRunsCollected.length} Runs geladen`);
       setAllRuns(allRunsCollected);
       setLastUpdate(new Date());
@@ -405,21 +427,39 @@ export default function ForgejoDashboard() {
       setError(err.message);
       addLog(`❌ Fehler: ${err.message}`);
     } finally {
+      clearTimeout(timeout);
       setDiscovering(false);
+      setProgress({ current: 0, total: 0, phase: 'idle' });
     }
-  }, [config, fetchOrgRepos, searchRepos, fetchRepoRuns]);
+  }, [config, discovering, fetchOrgRepos, searchRepos, fetchRepoRuns]);
 
   // Nur Runs aktualisieren (schneller)
   const refreshRuns = useCallback(async () => {
-    if (!config.baseUrl || discoveredRepos.length === 0) return;
+    if (!config.baseUrl || discoveredRepos.length === 0 || loading) return;
 
     setLoading(true);
+    const maxRuns = config.maxRuns || 250;
+    const totalMaxRuns = discoveredRepos.length * maxRuns;
+    setProgress({ current: 0, total: totalMaxRuns, phase: 'refreshing' });
+
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setProgress(p => ({ ...p, phase: 'idle' }));
+      setError('Refresh timed out after 60 seconds');
+    }, 60000);
 
     try {
       const allRunsCollected = [];
+      let runsFetched = 0;
 
-      for (const repo of discoveredRepos) {
-        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
+      for (let i = 0; i < discoveredRepos.length; i++) {
+        const repo = discoveredRepos[i];
+        const baseRunsFetched = runsFetched;
+        setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'refreshing' });
+        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+          setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'refreshing' });
+        });
+        runsFetched += runs.length;
         const enrichedRuns = runs.map(run => ({
           ...run,
           _repo: repo,
@@ -435,9 +475,11 @@ export default function ForgejoDashboard() {
     } catch (err) {
       setError(err.message);
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
+      setProgress({ current: 0, total: 0, phase: 'idle' });
     }
-  }, [config.baseUrl, discoveredRepos, fetchRepoRuns]);
+  }, [config.baseUrl, config.maxRuns, discoveredRepos, loading, fetchRepoRuns]);
 
   // Nach Workflow-Pattern filtern
   const filteredAndGroupedJobs = useMemo(() => {
@@ -771,6 +813,24 @@ export default function ForgejoDashboard() {
           </select>
 
           <button
+            onClick={discoveredRepos.length > 0 ? refreshRuns : discoverJobs}
+            disabled={loading || discovering}
+            title={discoveredRepos.length > 0 ? "Poll now" : "Discover & poll"}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '0.2rem',
+              color: '#22c55e',
+              cursor: loading || discovering ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              opacity: loading || discovering ? 0.4 : 0.8,
+            }}
+          >
+            <Play size={14} fill="#22c55e" />
+          </button>
+
+          <button
             onClick={refreshRuns}
             disabled={loading || discoveredRepos.length === 0}
             style={{
@@ -821,6 +881,23 @@ export default function ForgejoDashboard() {
           </button>
         </div>
       </header>
+
+      {/* Progress Bar */}
+      {progress.phase !== 'idle' && (
+        <div style={{
+          height: '3px',
+          background: t.border,
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            height: '100%',
+            background: progress.phase === 'discovering' ? '#f97316' : '#3b82f6',
+            width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : '0%',
+            transition: 'width 0.3s ease',
+          }} />
+        </div>
+      )}
 
       {/* Overall Status Bar */}
       {filteredAndGroupedJobs.length > 0 && (
@@ -1179,7 +1256,7 @@ export default function ForgejoDashboard() {
             {/* Discover Button */}
             <button
               onClick={discoverJobs}
-              disabled={discovering || !config.baseUrl}
+              disabled={discovering || loading || !config.baseUrl}
               style={{
                 width: '100%',
                 background: 'linear-gradient(135deg, #f97316, #ea580c)',
@@ -1187,14 +1264,14 @@ export default function ForgejoDashboard() {
                 borderRadius: '6px',
                 padding: '0.75rem',
                 color: 'white',
-                cursor: discovering ? 'wait' : 'pointer',
+                cursor: discovering || loading ? 'wait' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                opacity: discovering || !config.baseUrl ? 0.6 : 1,
+                opacity: discovering || loading || !config.baseUrl ? 0.6 : 1,
               }}
             >
               {discovering ? (
@@ -1255,7 +1332,31 @@ export default function ForgejoDashboard() {
         )}
 
         {/* Main Content */}
-        <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto' }}>
+        <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto', position: 'relative' }}>
+          {progress.phase !== 'idle' && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 0.75rem',
+              marginBottom: '0.75rem',
+              background: progress.phase === 'discovering' ? 'rgba(249,115,22,0.1)' : 'rgba(59,130,246,0.1)',
+              border: `1px solid ${progress.phase === 'discovering' ? 'rgba(249,115,22,0.25)' : 'rgba(59,130,246,0.25)'}`,
+              borderRadius: '6px',
+              fontSize: '0.75rem',
+              color: progress.phase === 'discovering' ? '#fb923c' : '#60a5fa',
+            }}>
+              <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
+              <span>
+                {progress.phase === 'discovering' && `Discovering orgs... ${progress.current}/${progress.total}`}
+                {progress.phase === 'fetching' && `Fetching runs... ${progress.current}/${progress.total}`}
+                {progress.phase === 'refreshing' && `Refreshing... ${progress.current}/${progress.total} runs`}
+              </span>
+              <span style={{ marginLeft: 'auto', opacity: 0.7 }}>
+                {progress.total > 0 ? `${Math.round((progress.current / progress.total) * 100)}%` : ''}
+              </span>
+            </div>
+          )}
           {error && (
             <div style={{
               background: 'rgba(239,68,68,0.1)',
