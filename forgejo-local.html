@@ -694,7 +694,7 @@
                               <tr key={job.jobPath} style={{ borderBottom: `1px solid ${t.rowBg}` }}>
                                 <td style={{ padding: '0.6rem 1rem' }}><div style={{ width: 12, height: 12, borderRadius: '50%', background: status.color, boxShadow: `0 0 8px ${status.color}60` }} /></td>
                                 <td style={{ padding: '0.6rem 1rem' }}>
-                                  <a href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${latestRun.id}`} target="_blank" rel="noopener noreferrer" style={{ color: t.text, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500 }}>
+                                  <a href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${latestRun.run_number || latestRun.id}`} target="_blank" rel="noopener noreferrer" style={{ color: t.text, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500 }}>
                                     {job.workflowName}
                                     <Icons.ExternalLink width={12} height={12} style={{ color: t.textDimmest }} />
                                   </a>
@@ -724,7 +724,7 @@
                                   <div style={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
                                     {job.allRuns.slice(0, 8).map((run, i) => {
                                       const s = getStatus(run.status, run.conclusion);
-                                      return <a key={run.id || i} href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${run.id}`} target="_blank" rel="noopener noreferrer" title={`#${run.run_number || i + 1} - ${s.label} - ${truncateMessage(getCommitMessage(run), 30)}`} style={{ width: 14, height: 14, borderRadius: 2, background: s.color, opacity: i === 0 ? 1 : 0.6 }} />;
+                                      return <a key={run.id || i} href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${run.run_number || run.id}`} target="_blank" rel="noopener noreferrer" title={`#${run.run_number || i + 1} - ${s.label} - ${truncateMessage(getCommitMessage(run), 30)}`} style={{ width: 14, height: 14, borderRadius: 2, background: s.color, opacity: i === 0 ? 1 : 0.6 }} />;
                                     })}
                                   </div>
                                 </td>
@@ -767,7 +767,7 @@
                           <div style={{ display: 'flex', gap: 3, marginTop: '0.35rem' }}>
                             {job.allRuns.slice(0, 10).map((run, i) => {
                               const s = getStatus(run.status, run.conclusion);
-                              return <a key={run.id || i} href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${run.id}`} target="_blank" rel="noopener noreferrer" title={`#${run.run_number || i + 1} - ${s.label} - ${truncateMessage(getCommitMessage(run), 30)}`} style={{ flex: 1, height: 20, borderRadius: 2, background: s.color, opacity: i === 0 ? 1 : 0.5 }} />;
+                              return <a key={run.id || i} href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${run.run_number || run.id}`} target="_blank" rel="noopener noreferrer" title={`#${run.run_number || i + 1} - ${s.label} - ${truncateMessage(getCommitMessage(run), 30)}`} style={{ flex: 1, height: 20, borderRadius: 2, background: s.color, opacity: i === 0 ? 1 : 0.5 }} />;
                             })}
                           </div>
                         </div>
