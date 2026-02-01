@@ -168,11 +168,17 @@ export default function ForgejoDashboard() {
   const [loading, setLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [error, setError] = useState(null);
-  const [showSettings, setShowSettings] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(30);
+  const [showSettings, setShowSettings] = useState(() => {
+    try { const p = JSON.parse(localStorage.getItem('forgejo-dashboard-ui-prefs')); return p?.showSettings ?? true; } catch { return true; }
+  });
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    try { const p = JSON.parse(localStorage.getItem('forgejo-dashboard-ui-prefs')); return p?.autoRefresh ?? 30; } catch { return 30; }
+  });
   const [lastUpdate, setLastUpdate] = useState(null);
   const [newOrg, setNewOrg] = useState('');
-  const [viewMode, setViewMode] = useState('table');
+  const [viewMode, setViewMode] = useState(() => {
+    try { const p = JSON.parse(localStorage.getItem('forgejo-dashboard-ui-prefs')); return p?.viewMode || 'table'; } catch { return 'table'; }
+  });
   const [expandedJobs, setExpandedJobs] = useState(new Set());
   const [expandedRepos, setExpandedRepos] = useState(new Set());
   const [discoveryLog, setDiscoveryLog] = useState([]);
@@ -186,6 +192,11 @@ export default function ForgejoDashboard() {
     localStorage.setItem('forgejo-dashboard-theme', themeMode);
   }, [themeMode]);
 
+  // Save UI preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('forgejo-dashboard-ui-prefs', JSON.stringify({ showSettings, autoRefresh, viewMode }));
+  }, [showSettings, autoRefresh, viewMode]);
+
   // Load config from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('forgejo-dashboard-v3-config');
@@ -193,7 +204,9 @@ export default function ForgejoDashboard() {
       try {
         const parsed = JSON.parse(saved);
         setConfig(parsed);
-        if (parsed.baseUrl && (parsed.organizations?.length > 0 || parsed.repoPattern)) {
+        // Only auto-hide settings if there's no persisted UI preference for it
+        const hasUiPrefs = localStorage.getItem('forgejo-dashboard-ui-prefs');
+        if (!hasUiPrefs && parsed.baseUrl && (parsed.organizations?.length > 0 || parsed.repoPattern)) {
           setShowSettings(false);
         }
       } catch (e) {
