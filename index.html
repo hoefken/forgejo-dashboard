@@ -48,6 +48,7 @@
       ChevronRight: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
       Sun: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
       Moon: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>,
+      Play: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
     };
 
     const STATUS_MAP = {
@@ -202,6 +203,7 @@
       const [loading, setLoading] = useState(false);
       const [discovering, setDiscovering] = useState(false);
       const [error, setError] = useState(null);
+      const [progress, setProgress] = useState({ current: 0, total: 0, phase: 'idle' });
       const [showSettings, setShowSettings] = useState(() => {
         try { const p = JSON.parse(localStorage.getItem('forgejo-dashboard-ui-prefs')); return p?.showSettings ?? true; } catch { return true; }
       });
@@ -317,7 +319,7 @@
         };
       };
 
-      const fetchRepoRuns = useCallback(async (owner, repo) => {
+      const fetchRepoRuns = useCallback(async (owner, repo, onProgress) => {
         try {
           const allRuns = [];
           const PAGE_LIMIT = 50;
@@ -333,6 +335,8 @@
               allRuns.push(normalizeRun(run));
             }
 
+            if (onProgress) onProgress(allRuns.length);
+
             if (runs.length < PAGE_LIMIT) break;
           }
 
@@ -344,15 +348,24 @@
       }, [apiCall, config.maxRuns]);
 
       const discoverJobs = useCallback(async () => {
-        if (!config.baseUrl) return;
+        if (!config.baseUrl || discovering) return;
         setDiscovering(true);
         setDiscoveryLog([]);
         setError(null);
+        setProgress({ current: 0, total: config.organizations.length, phase: 'discovering' });
+
+        const timeout = setTimeout(() => {
+          setDiscovering(false);
+          setProgress(p => ({ ...p, phase: 'idle' }));
+          setError('Discovery timed out after 60 seconds');
+        }, 60000);
 
         try {
           let allRepos = [];
 
-          for (const org of config.organizations) {
+          for (let i = 0; i < config.organizations.length; i++) {
+            const org = config.organizations[i];
+            setProgress({ current: i + 1, total: config.organizations.length, phase: 'discovering' });
             addLog(`\ud83d\udd0d Durchsuche Organisation: ${org}`);
             const repos = await fetchOrgRepos(org);
             addLog(`   \u2192 ${repos.length} Repos gefunden`);
@@ -379,14 +392,24 @@
           setDiscoveredRepos(matchingRepos);
 
           const allRunsCollected = [];
-          for (const repo of matchingRepos) {
+          const maxRuns = config.maxRuns || 250;
+          const totalMaxRuns = matchingRepos.length * maxRuns;
+          let runsFetched = 0;
+          for (let i = 0; i < matchingRepos.length; i++) {
+            const repo = matchingRepos[i];
+            setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
             addLog(`\ud83d\udce5 Lade Runs f\u00fcr: ${repo.full_name}`);
-            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
+            const baseRunsFetched = runsFetched;
+            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+              setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'fetching' });
+            });
+            runsFetched += runs.length;
             allRunsCollected.push(...runs.map(run => ({
               ...run, _repo: repo, _repoFullName: repo.full_name, _jobPath: getJobPath(repo.full_name, run),
             })));
           }
 
+          setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
           addLog(`\u2705 Insgesamt ${allRunsCollected.length} Runs geladen`);
           setAllRuns(allRunsCollected);
           setLastUpdate(new Date());
@@ -394,17 +417,36 @@
           setError(err.message);
           addLog(`\u274c Fehler: ${err.message}`);
         } finally {
+          clearTimeout(timeout);
           setDiscovering(false);
+          setProgress({ current: 0, total: 0, phase: 'idle' });
         }
-      }, [config, fetchOrgRepos, searchRepos, fetchRepoRuns]);
+      }, [config, discovering, fetchOrgRepos, searchRepos, fetchRepoRuns]);
 
       const refreshRuns = useCallback(async () => {
-        if (!config.baseUrl || !discoveredRepos.length) return;
+        if (!config.baseUrl || !discoveredRepos.length || loading) return;
         setLoading(true);
+        const maxRuns = config.maxRuns || 250;
+        const totalMaxRuns = discoveredRepos.length * maxRuns;
+        setProgress({ current: 0, total: totalMaxRuns, phase: 'refreshing' });
+
+        const timeout = setTimeout(() => {
+          setLoading(false);
+          setProgress(p => ({ ...p, phase: 'idle' }));
+          setError('Refresh timed out after 60 seconds');
+        }, 60000);
+
         try {
           const allRunsCollected = [];
-          for (const repo of discoveredRepos) {
-            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
+          let runsFetched = 0;
+          for (let i = 0; i < discoveredRepos.length; i++) {
+            const repo = discoveredRepos[i];
+            const baseRunsFetched = runsFetched;
+            setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'refreshing' });
+            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+              setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'refreshing' });
+            });
+            runsFetched += runs.length;
             allRunsCollected.push(...runs.map(run => ({
               ...run, _repo: repo, _repoFullName: repo.full_name, _jobPath: getJobPath(repo.full_name, run),
             })));
@@ -414,9 +456,11 @@
         } catch (err) {
           setError(err.message);
         } finally {
+          clearTimeout(timeout);
           setLoading(false);
+          setProgress({ current: 0, total: 0, phase: 'idle' });
         }
-      }, [config.baseUrl, discoveredRepos, fetchRepoRuns]);
+      }, [config.baseUrl, config.maxRuns, discoveredRepos, loading, fetchRepoRuns]);
 
       const filteredAndGroupedJobs = useMemo(() => {
         let workflowRegex;
@@ -539,6 +583,9 @@
                 <option value={30}>30s</option>
                 <option value={60}>60s</option>
               </select>
+              <button onClick={discoveredRepos.length > 0 ? refreshRuns : discoverJobs} disabled={loading || discovering} title={discoveredRepos.length > 0 ? "Poll now" : "Discover & poll"} style={{ background: 'transparent', border: 'none', padding: '0.2rem', color: '#22c55e', cursor: loading || discovering ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', opacity: loading || discovering ? 0.4 : 0.8 }}>
+                <Icons.Play width={14} height={14} />
+              </button>
               <div style={{ display: 'flex', border: `1px solid ${t.borderLight}`, borderRadius: 4, overflow: 'hidden' }}>
                 <button onClick={() => setViewMode('grid')} style={{ background: viewMode === 'grid' ? t.btnActiveBg : 'transparent', border: 'none', padding: '0.4rem 0.6rem', color: viewMode === 'grid' ? t.btnActiveText : t.textDim, cursor: 'pointer', fontSize: '0.7rem' }}>Grid</button>
                 <button onClick={() => setViewMode('table')} style={{ background: viewMode === 'table' ? t.btnActiveBg : 'transparent', border: 'none', padding: '0.4rem 0.6rem', color: viewMode === 'table' ? t.btnActiveText : t.textDim, cursor: 'pointer', fontSize: '0.7rem' }}>Table</button>
@@ -554,6 +601,13 @@
               </button>
             </div>
           </header>
+
+          {/* Progress Bar */}
+          {progress.phase !== 'idle' && (
+            <div style={{ height: 3, background: t.border, position: 'relative', overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: progress.phase === 'discovering' ? '#f97316' : '#3b82f6', width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : '0%', transition: 'width 0.3s ease' }} />
+            </div>
+          )}
 
           {/* Status Bar */}
           {filteredAndGroupedJobs.length > 0 && (
@@ -638,7 +692,7 @@
                   <span style={{ display: 'block', fontSize: '0.6rem', color: t.textDimmest, marginTop: '0.3rem' }}>Max Runs pro Repo (in 50er-Schritten). H&ouml;her = mehr Workflows sichtbar, aber langsamer.</span>
                 </div>
 
-                <button onClick={discoverJobs} disabled={discovering || !config.baseUrl} style={{ width: '100%', background: 'linear-gradient(135deg, #f97316, #ea580c)', border: 'none', borderRadius: 6, padding: '0.75rem', color: 'white', cursor: discovering ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, opacity: discovering || !config.baseUrl ? 0.6 : 1 }}>
+                <button onClick={discoverJobs} disabled={discovering || loading || !config.baseUrl} style={{ width: '100%', background: 'linear-gradient(135deg, #f97316, #ea580c)', border: 'none', borderRadius: 6, padding: '0.75rem', color: 'white', cursor: discovering || loading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, opacity: discovering || loading || !config.baseUrl ? 0.6 : 1 }}>
                   {discovering ? <><Icons.RefreshCw width={16} height={16} className="spinning" />Discovering...</> : <><Icons.Search width={16} height={16} />Discover Jobs</>}
                 </button>
 
@@ -659,7 +713,18 @@
             )}
 
             {/* Main Content */}
-            <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto' }}>
+            <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto', position: 'relative' }}>
+              {progress.phase !== 'idle' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', marginBottom: '0.75rem', background: progress.phase === 'discovering' ? 'rgba(249,115,22,0.1)' : 'rgba(59,130,246,0.1)', border: `1px solid ${progress.phase === 'discovering' ? 'rgba(249,115,22,0.25)' : 'rgba(59,130,246,0.25)'}`, borderRadius: 6, fontSize: '0.75rem', color: progress.phase === 'discovering' ? '#fb923c' : '#60a5fa' }}>
+                  <Icons.RefreshCw width={12} height={12} className="spinning" />
+                  <span>
+                    {progress.phase === 'discovering' && `Discovering orgs... ${progress.current}/${progress.total}`}
+                    {progress.phase === 'fetching' && `Fetching runs... ${progress.current}/${progress.total}`}
+                    {progress.phase === 'refreshing' && `Refreshing... ${progress.current}/${progress.total} runs`}
+                  </span>
+                  <span style={{ marginLeft: 'auto', opacity: 0.7 }}>{progress.total > 0 ? `${Math.round((progress.current / progress.total) * 100)}%` : ''}</span>
+                </div>
+              )}
               {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '1rem', marginBottom: '1rem', color: '#fca5a5', fontSize: '0.85rem' }}>{'\u26a0\ufe0f'} {error}</div>}
 
               {!filteredAndGroupedJobs.length ? (
