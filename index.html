@@ -66,10 +66,10 @@
         bg: 'linear-gradient(180deg, #0d0d0d 0%, #1a1a1a 100%)',
         text: '#e5e5e5',
         textBright: '#fff',
-        textMuted: '#888',
-        textDim: '#666',
-        textDimmer: '#555',
-        textDimmest: '#444',
+        textMuted: '#b0b0b0',
+        textDim: '#999',
+        textDimmer: '#888',
+        textDimmest: '#777',
         border: '#2a2a2a',
         borderLight: '#333',
         borderDark: '#222',
@@ -98,10 +98,10 @@
         bg: 'linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%)',
         text: '#1a1a1a',
         textBright: '#000',
-        textMuted: '#555',
-        textDim: '#777',
-        textDimmer: '#888',
-        textDimmest: '#aaa',
+        textMuted: '#444',
+        textDim: '#555',
+        textDimmer: '#666',
+        textDimmest: '#888',
         border: '#e0e0e0',
         borderLight: '#d0d0d0',
         borderDark: '#e5e5e5',
@@ -757,21 +757,21 @@
                         <div style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${t.borderDark}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: '0.85rem', fontWeight: 600, color: t.text, marginBottom: '0.25rem' }}>{job.workflowName}</div>
-                            <div style={{ fontSize: '0.7rem', color: t.textDimmer }}>{job.repoFullName}</div>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 500, color: t.textDimmer }}>{job.repoFullName}</div>
                           </div>
                           <JobStatusIcon width={18} height={18} style={{ color: status.color }} />
                         </div>
                         <div style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center', fontSize: '0.7rem' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', fontWeight: 500 }}>
                             <span style={{ color: t.textDim, display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Icons.GitBranch width={12} height={12} style={{ flexShrink: 0 }} />{job.latestRun.head_branch || 'main'}</span>
                             <span style={{ color: t.textDimmer, display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Icons.Clock width={12} height={12} style={{ flexShrink: 0 }} />{formatTimeAgo(job.latestRun.created_at)}</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.7rem', color: t.textMuted, overflow: 'hidden' }} title={getCommitMessage(job.latestRun)}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', fontWeight: 500, color: t.textMuted, overflow: 'hidden' }} title={getCommitMessage(job.latestRun)}>
                             <Icons.GitCommit width={12} height={12} style={{ color: t.textDim, flexShrink: 0 }} />
                             <a href={`${config.baseUrl}/${job.repoFullName}/commit/${job.latestRun.head_sha}`} target="_blank" rel="noopener noreferrer" style={{ color: t.linkColor, textDecoration: 'none', fontFamily: 'monospace', flexShrink: 0 }}>{getCommitSha(job.latestRun)}</a>
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{truncateMessage(getCommitMessage(job.latestRun), 35)}</span>
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center', fontSize: '0.7rem' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', fontWeight: 500 }}>
                             <span style={{ color: t.textDim, display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Icons.User width={12} height={12} style={{ flexShrink: 0 }} />{getAuthor(job.latestRun)}</span>
                             <span style={{ color: t.textDimmer, display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Icons.Timer width={12} height={12} style={{ flexShrink: 0 }} />{formatDuration(job.latestRun.started_at, job.latestRun.completed_at)}</span>
                           </div>
