@@ -332,11 +332,16 @@ export default function ForgejoDashboard() {
 
   // Discovery: Alle Repos und deren Runs finden
   const discoverJobs = useCallback(async () => {
-    if (!config.baseUrl) return;
+    if (!config.baseUrl || discovering) return;
 
     setDiscovering(true);
     setDiscoveryLog([]);
     setError(null);
+
+    const timeout = setTimeout(() => {
+      setDiscovering(false);
+      setError('Discovery timed out after 60 seconds');
+    }, 60000);
 
     try {
       let allRepos = [];
@@ -405,15 +410,21 @@ export default function ForgejoDashboard() {
       setError(err.message);
       addLog(`❌ Fehler: ${err.message}`);
     } finally {
+      clearTimeout(timeout);
       setDiscovering(false);
     }
-  }, [config, fetchOrgRepos, searchRepos, fetchRepoRuns]);
+  }, [config, discovering, fetchOrgRepos, searchRepos, fetchRepoRuns]);
 
   // Nur Runs aktualisieren (schneller)
   const refreshRuns = useCallback(async () => {
-    if (!config.baseUrl || discoveredRepos.length === 0) return;
+    if (!config.baseUrl || discoveredRepos.length === 0 || loading) return;
 
     setLoading(true);
+
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setError('Refresh timed out after 60 seconds');
+    }, 60000);
 
     try {
       const allRunsCollected = [];
@@ -435,9 +446,10 @@ export default function ForgejoDashboard() {
     } catch (err) {
       setError(err.message);
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
-  }, [config.baseUrl, discoveredRepos, fetchRepoRuns]);
+  }, [config.baseUrl, discoveredRepos, loading, fetchRepoRuns]);
 
   // Nach Workflow-Pattern filtern
   const filteredAndGroupedJobs = useMemo(() => {
@@ -1197,7 +1209,7 @@ export default function ForgejoDashboard() {
             {/* Discover Button */}
             <button
               onClick={discoverJobs}
-              disabled={discovering || !config.baseUrl}
+              disabled={discovering || loading || !config.baseUrl}
               style={{
                 width: '100%',
                 background: 'linear-gradient(135deg, #f97316, #ea580c)',
@@ -1205,14 +1217,14 @@ export default function ForgejoDashboard() {
                 borderRadius: '6px',
                 padding: '0.75rem',
                 color: 'white',
-                cursor: discovering ? 'wait' : 'pointer',
+                cursor: discovering || loading ? 'wait' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                opacity: discovering || !config.baseUrl ? 0.6 : 1,
+                opacity: discovering || loading || !config.baseUrl ? 0.6 : 1,
               }}
             >
               {discovering ? (
