@@ -168,6 +168,7 @@ export default function ForgejoDashboard() {
   const [loading, setLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [error, setError] = useState(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0, phase: 'idle' });
   const [showSettings, setShowSettings] = useState(() => {
     try { const p = JSON.parse(localStorage.getItem('forgejo-dashboard-ui-prefs')); return p?.showSettings ?? true; } catch { return true; }
   });
@@ -337,16 +338,20 @@ export default function ForgejoDashboard() {
     setDiscovering(true);
     setDiscoveryLog([]);
     setError(null);
+    setProgress({ current: 0, total: config.organizations.length, phase: 'discovering' });
 
     const timeout = setTimeout(() => {
       setDiscovering(false);
+      setProgress(p => ({ ...p, phase: 'idle' }));
       setError('Discovery timed out after 60 seconds');
     }, 60000);
 
     try {
       let allRepos = [];
 
-      for (const org of config.organizations) {
+      for (let i = 0; i < config.organizations.length; i++) {
+        const org = config.organizations[i];
+        setProgress({ current: i + 1, total: config.organizations.length, phase: 'discovering' });
         addLog(`🔍 Durchsuche Organisation: ${org}`);
         const repos = await fetchOrgRepos(org);
         addLog(`   → ${repos.length} Repos gefunden`);
@@ -387,7 +392,9 @@ export default function ForgejoDashboard() {
 
       const allRunsCollected = [];
 
-      for (const repo of matchingRepos) {
+      for (let i = 0; i < matchingRepos.length; i++) {
+        const repo = matchingRepos[i];
+        setProgress({ current: i + 1, total: matchingRepos.length, phase: 'fetching' });
         addLog(`📥 Lade Runs für: ${repo.full_name}`);
         const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
 
@@ -412,6 +419,7 @@ export default function ForgejoDashboard() {
     } finally {
       clearTimeout(timeout);
       setDiscovering(false);
+      setProgress({ current: 0, total: 0, phase: 'idle' });
     }
   }, [config, discovering, fetchOrgRepos, searchRepos, fetchRepoRuns]);
 
@@ -420,16 +428,20 @@ export default function ForgejoDashboard() {
     if (!config.baseUrl || discoveredRepos.length === 0 || loading) return;
 
     setLoading(true);
+    setProgress({ current: 0, total: discoveredRepos.length, phase: 'refreshing' });
 
     const timeout = setTimeout(() => {
       setLoading(false);
+      setProgress(p => ({ ...p, phase: 'idle' }));
       setError('Refresh timed out after 60 seconds');
     }, 60000);
 
     try {
       const allRunsCollected = [];
 
-      for (const repo of discoveredRepos) {
+      for (let i = 0; i < discoveredRepos.length; i++) {
+        const repo = discoveredRepos[i];
+        setProgress({ current: i + 1, total: discoveredRepos.length, phase: 'refreshing' });
         const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
         const enrichedRuns = runs.map(run => ({
           ...run,
@@ -448,6 +460,7 @@ export default function ForgejoDashboard() {
     } finally {
       clearTimeout(timeout);
       setLoading(false);
+      setProgress({ current: 0, total: 0, phase: 'idle' });
     }
   }, [config.baseUrl, discoveredRepos, loading, fetchRepoRuns]);
 
@@ -851,6 +864,23 @@ export default function ForgejoDashboard() {
           </button>
         </div>
       </header>
+
+      {/* Progress Bar */}
+      {progress.phase !== 'idle' && (
+        <div style={{
+          height: '3px',
+          background: t.border,
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            height: '100%',
+            background: progress.phase === 'discovering' ? '#f97316' : '#3b82f6',
+            width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : '0%',
+            transition: 'width 0.3s ease',
+          }} />
+        </div>
+      )}
 
       {/* Overall Status Bar */}
       {filteredAndGroupedJobs.length > 0 && (
@@ -1285,7 +1315,31 @@ export default function ForgejoDashboard() {
         )}
 
         {/* Main Content */}
-        <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto' }}>
+        <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto', position: 'relative' }}>
+          {progress.phase !== 'idle' && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 0.75rem',
+              marginBottom: '0.75rem',
+              background: progress.phase === 'discovering' ? 'rgba(249,115,22,0.1)' : 'rgba(59,130,246,0.1)',
+              border: `1px solid ${progress.phase === 'discovering' ? 'rgba(249,115,22,0.25)' : 'rgba(59,130,246,0.25)'}`,
+              borderRadius: '6px',
+              fontSize: '0.75rem',
+              color: progress.phase === 'discovering' ? '#fb923c' : '#60a5fa',
+            }}>
+              <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
+              <span>
+                {progress.phase === 'discovering' && `Discovering orgs... ${progress.current}/${progress.total}`}
+                {progress.phase === 'fetching' && `Fetching runs... ${progress.current}/${progress.total} repos`}
+                {progress.phase === 'refreshing' && `Refreshing... ${progress.current}/${progress.total} repos`}
+              </span>
+              <span style={{ marginLeft: 'auto', opacity: 0.7 }}>
+                {progress.total > 0 ? `${Math.round((progress.current / progress.total) * 100)}%` : ''}
+              </span>
+            </div>
+          )}
           {error && (
             <div style={{
               background: 'rgba(239,68,68,0.1)',
