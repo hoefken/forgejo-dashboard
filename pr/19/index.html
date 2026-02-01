@@ -540,7 +540,7 @@
                 <option value={30}>30s</option>
                 <option value={60}>60s</option>
               </select>
-              <button onClick={refreshRuns} disabled={loading || !discoveredRepos.length} title="Poll now" style={{ background: 'transparent', border: 'none', padding: '0.2rem', color: '#22c55e', cursor: loading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', opacity: loading || !discoveredRepos.length ? 0.4 : 0.8 }}>
+              <button onClick={discoveredRepos.length > 0 ? refreshRuns : discoverJobs} disabled={loading || discovering} title={discoveredRepos.length > 0 ? "Poll now" : "Discover & poll"} style={{ background: 'transparent', border: 'none', padding: '0.2rem', color: '#22c55e', cursor: loading || discovering ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', opacity: loading || discovering ? 0.4 : 0.8 }}>
                 <Icons.Play width={14} height={14} />
               </button>
               <div style={{ display: 'flex', border: `1px solid ${t.borderLight}`, borderRadius: 4, overflow: 'hidden' }}>
