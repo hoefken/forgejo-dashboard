@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, PlayCircle, Play, Settings, Search, Trash2, ExternalLink, GitBranch, Activity, Filter, Regex, FolderSearch, ChevronDown, ChevronRight, User, GitCommit, MessageSquare, Sun, Moon } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, PlayCircle, Play, Settings, Search, Trash2, ExternalLink, GitBranch, Activity, Filter, Regex, FolderSearch, ChevronDown, ChevronRight, User, GitCommit, MessageSquare, Sun, Moon, Pencil, X, Check } from 'lucide-react';
 
 // Status mapping für Forgejo Actions
 const STATUS_MAP = {
@@ -186,12 +186,25 @@ export default function ForgejoDashboard() {
   const [themeMode, setThemeMode] = useState(() => {
     try { return localStorage.getItem('forgejo-dashboard-theme') || 'dark'; } catch { return 'dark'; }
   });
+  const [workflowRenames, setWorkflowRenames] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('forgejo-dashboard-workflow-renames')) || {};
+    } catch { return {}; }
+  });
+  const [editingJobPath, setEditingJobPath] = useState(null);
+  const [editingName, setEditingName] = useState('');
+  const renameInputRef = useRef(null);
   const t = THEMES[themeMode] || THEMES.dark;
 
   // Save theme to localStorage
   useEffect(() => {
     localStorage.setItem('forgejo-dashboard-theme', themeMode);
   }, [themeMode]);
+
+  // Save workflow renames to localStorage
+  useEffect(() => {
+    localStorage.setItem('forgejo-dashboard-workflow-renames', JSON.stringify(workflowRenames));
+  }, [workflowRenames]);
 
   // Save UI preferences to localStorage
   useEffect(() => {
@@ -602,6 +615,37 @@ export default function ForgejoDashboard() {
       } else {
         next.add(repoName);
       }
+      return next;
+    });
+  };
+
+  const getDisplayName = (jobPath, originalName) => {
+    return workflowRenames[jobPath] || originalName;
+  };
+
+  const startRename = (jobPath, currentName) => {
+    setEditingJobPath(jobPath);
+    setEditingName(workflowRenames[jobPath] || currentName);
+    setTimeout(() => renameInputRef.current?.focus(), 0);
+  };
+
+  const confirmRename = () => {
+    if (editingJobPath && editingName.trim()) {
+      setWorkflowRenames(prev => ({ ...prev, [editingJobPath]: editingName.trim() }));
+    }
+    setEditingJobPath(null);
+    setEditingName('');
+  };
+
+  const cancelRename = () => {
+    setEditingJobPath(null);
+    setEditingName('');
+  };
+
+  const removeRename = (jobPath) => {
+    setWorkflowRenames(prev => {
+      const next = { ...prev };
+      delete next[jobPath];
       return next;
     });
   };
@@ -1328,6 +1372,83 @@ export default function ForgejoDashboard() {
                 </div>
               </div>
             )}
+
+            {/* Workflow Renames */}
+            {Object.keys(workflowRenames).length > 0 && (
+              <div style={{ marginTop: '1.25rem' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.7rem',
+                  color: t.textDimmer,
+                  marginBottom: '0.4rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>
+                  <Pencil size={12} />
+                  Workflow Renames
+                </label>
+                <div style={{
+                  background: t.logBg,
+                  border: `1px solid ${t.borderDark}`,
+                  borderRadius: '4px',
+                  padding: '0.5rem',
+                  maxHeight: '250px',
+                  overflowY: 'auto',
+                }}>
+                  {Object.entries(workflowRenames).map(([jobPath, customName]) => (
+                    <div key={jobPath} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      padding: '0.35rem 0.25rem',
+                      borderBottom: `1px solid ${t.borderDark}`,
+                      fontSize: '0.7rem',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: t.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {customName}
+                        </div>
+                        <div style={{ color: t.textDimmest, fontSize: '0.6rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={jobPath}>
+                          {jobPath}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => startRename(jobPath, jobPath.split('/').pop())}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          padding: '0.15rem',
+                          color: t.textDim,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexShrink: 0,
+                        }}
+                        title="Edit rename"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                      <button
+                        onClick={() => removeRename(jobPath)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          padding: '0.15rem',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexShrink: 0,
+                        }}
+                        title="Remove rename"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1486,23 +1607,79 @@ export default function ForgejoDashboard() {
                                 }} />
                               </td>
                               <td style={{ padding: '0.6rem 1rem' }}>
-                                <a
-                                  href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${latestRun.run_number || latestRun.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  style={{
-                                    color: t.text,
-                                    textDecoration: 'none',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {job.workflowName}
-                                  <ExternalLink size={12} style={{ color: t.textDimmest }} />
-                                </a>
+                                {editingJobPath === job.jobPath ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }} onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      ref={renameInputRef}
+                                      type="text"
+                                      value={editingName}
+                                      onChange={(e) => setEditingName(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') confirmRename();
+                                        if (e.key === 'Escape') cancelRename();
+                                      }}
+                                      style={{
+                                        background: t.inputBg,
+                                        border: `1px solid ${t.borderLight}`,
+                                        borderRadius: '3px',
+                                        padding: '0.25rem 0.4rem',
+                                        color: t.text,
+                                        fontSize: '0.8rem',
+                                        fontFamily: 'inherit',
+                                        width: '200px',
+                                      }}
+                                    />
+                                    <button onClick={confirmRename} style={{ background: 'transparent', border: 'none', padding: '0.15rem', color: '#22c55e', cursor: 'pointer', display: 'flex' }}>
+                                      <Check size={14} />
+                                    </button>
+                                    <button onClick={cancelRename} style={{ background: 'transparent', border: 'none', padding: '0.15rem', color: '#ef4444', cursor: 'pointer', display: 'flex' }}>
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <a
+                                      href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${latestRun.run_number || latestRun.id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{
+                                        color: t.text,
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        fontWeight: 500,
+                                      }}
+                                    >
+                                      {getDisplayName(job.jobPath, job.workflowName)}
+                                      <ExternalLink size={12} style={{ color: t.textDimmest }} />
+                                    </a>
+                                    {workflowRenames[job.jobPath] && (
+                                      <span style={{ fontSize: '0.65rem', color: t.textDimmest }} title={`Original: ${job.workflowName}`}>
+                                        ({job.workflowName})
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); startRename(job.jobPath, job.workflowName); }}
+                                      style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        padding: '0.15rem',
+                                        color: t.textDimmest,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        opacity: 0.5,
+                                        transition: 'opacity 0.15s',
+                                      }}
+                                      onMouseOver={(e) => e.currentTarget.style.opacity = 1}
+                                      onMouseOut={(e) => e.currentTarget.style.opacity = 0.5}
+                                      title="Rename workflow"
+                                    >
+                                      <Pencil size={12} />
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                               <td style={{ padding: '0.6rem 1rem', maxWidth: '250px' }}>
                                 <div style={{
