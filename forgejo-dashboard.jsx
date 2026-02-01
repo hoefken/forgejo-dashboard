@@ -588,7 +588,7 @@ export default function ForgejoDashboard() {
         </td>
         <td style={{ padding: '0.5rem 1rem' }}>
           <a
-            href={`${config.baseUrl}/${repoFullName}/actions/runs/${run.id}`}
+            href={`${config.baseUrl}/${repoFullName}/actions/runs/${run.run_number || run.id}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -1373,7 +1373,7 @@ export default function ForgejoDashboard() {
                               </td>
                               <td style={{ padding: '0.6rem 1rem' }}>
                                 <a
-                                  href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${latestRun.id}`}
+                                  href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${latestRun.run_number || latestRun.id}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   onClick={(e) => e.stopPropagation()}
@@ -1438,7 +1438,7 @@ export default function ForgejoDashboard() {
                                     return (
                                       <a
                                         key={run.id || i}
-                                        href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${run.id}`}
+                                        href={`${config.baseUrl}/${job.repoFullName}/actions/runs/${run.run_number || run.id}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         onClick={(e) => e.stopPropagation()}
