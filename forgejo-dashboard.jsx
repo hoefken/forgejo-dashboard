@@ -771,18 +771,18 @@ export default function ForgejoDashboard() {
           </select>
 
           <button
-            onClick={refreshRuns}
-            disabled={loading || discoveredRepos.length === 0}
-            title="Poll now"
+            onClick={discoveredRepos.length > 0 ? refreshRuns : discoverJobs}
+            disabled={loading || discovering}
+            title={discoveredRepos.length > 0 ? "Poll now" : "Discover & poll"}
             style={{
               background: 'transparent',
               border: 'none',
               padding: '0.2rem',
               color: '#22c55e',
-              cursor: loading ? 'wait' : 'pointer',
+              cursor: loading || discovering ? 'wait' : 'pointer',
               display: 'flex',
               alignItems: 'center',
-              opacity: loading || discoveredRepos.length === 0 ? 0.4 : 0.8,
+              opacity: loading || discovering ? 0.4 : 0.8,
             }}
           >
             <Play size={14} fill="#22c55e" />
