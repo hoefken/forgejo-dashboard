@@ -302,7 +302,7 @@ export default function ForgejoDashboard() {
   };
 
   // Workflow Runs für ein Repo abrufen (paginiert bis alle Workflows abgedeckt sind)
-  const fetchRepoRuns = useCallback(async (owner, repo) => {
+  const fetchRepoRuns = useCallback(async (owner, repo, onProgress) => {
     try {
       const allRuns = [];
       const PAGE_LIMIT = 50;
@@ -317,6 +317,8 @@ export default function ForgejoDashboard() {
         for (const run of runs) {
           allRuns.push(normalizeRun(run));
         }
+
+        if (onProgress) onProgress(allRuns.length);
 
         // Stop if page was not full (no more data)
         if (runs.length < PAGE_LIMIT) break;
@@ -391,13 +393,20 @@ export default function ForgejoDashboard() {
       setDiscoveredRepos(matchingRepos);
 
       const allRunsCollected = [];
+      const maxRuns = config.maxRuns || 250;
+      const totalMaxRuns = matchingRepos.length * maxRuns;
+      let runsFetched = 0;
 
       for (let i = 0; i < matchingRepos.length; i++) {
         const repo = matchingRepos[i];
-        setProgress({ current: i + 1, total: matchingRepos.length, phase: 'fetching' });
+        setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
         addLog(`📥 Lade Runs für: ${repo.full_name}`);
-        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
+        const baseRunsFetched = runsFetched;
+        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+          setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'fetching' });
+        });
 
+        runsFetched += runs.length;
         const enrichedRuns = runs.map(run => ({
           ...run,
           _repo: repo,
@@ -409,6 +418,7 @@ export default function ForgejoDashboard() {
         allRunsCollected.push(...enrichedRuns);
       }
 
+      setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
       addLog(`✅ Insgesamt ${allRunsCollected.length} Runs geladen`);
       setAllRuns(allRunsCollected);
       setLastUpdate(new Date());
@@ -428,7 +438,9 @@ export default function ForgejoDashboard() {
     if (!config.baseUrl || discoveredRepos.length === 0 || loading) return;
 
     setLoading(true);
-    setProgress({ current: 0, total: discoveredRepos.length, phase: 'refreshing' });
+    const maxRuns = config.maxRuns || 250;
+    const totalMaxRuns = discoveredRepos.length * maxRuns;
+    setProgress({ current: 0, total: totalMaxRuns, phase: 'refreshing' });
 
     const timeout = setTimeout(() => {
       setLoading(false);
@@ -438,11 +450,16 @@ export default function ForgejoDashboard() {
 
     try {
       const allRunsCollected = [];
+      let runsFetched = 0;
 
       for (let i = 0; i < discoveredRepos.length; i++) {
         const repo = discoveredRepos[i];
-        setProgress({ current: i + 1, total: discoveredRepos.length, phase: 'refreshing' });
-        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
+        const baseRunsFetched = runsFetched;
+        setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'refreshing' });
+        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+          setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'refreshing' });
+        });
+        runsFetched += runs.length;
         const enrichedRuns = runs.map(run => ({
           ...run,
           _repo: repo,
@@ -462,7 +479,7 @@ export default function ForgejoDashboard() {
       setLoading(false);
       setProgress({ current: 0, total: 0, phase: 'idle' });
     }
-  }, [config.baseUrl, discoveredRepos, loading, fetchRepoRuns]);
+  }, [config.baseUrl, config.maxRuns, discoveredRepos, loading, fetchRepoRuns]);
 
   // Nach Workflow-Pattern filtern
   const filteredAndGroupedJobs = useMemo(() => {
@@ -1332,8 +1349,8 @@ export default function ForgejoDashboard() {
               <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
               <span>
                 {progress.phase === 'discovering' && `Discovering orgs... ${progress.current}/${progress.total}`}
-                {progress.phase === 'fetching' && `Fetching runs... ${progress.current}/${progress.total} repos`}
-                {progress.phase === 'refreshing' && `Refreshing... ${progress.current}/${progress.total} repos`}
+                {progress.phase === 'fetching' && `Fetching runs... ${progress.current}/${progress.total}`}
+                {progress.phase === 'refreshing' && `Refreshing... ${progress.current}/${progress.total} runs`}
               </span>
               <span style={{ marginLeft: 'auto', opacity: 0.7 }}>
                 {progress.total > 0 ? `${Math.round((progress.current / progress.total) * 100)}%` : ''}

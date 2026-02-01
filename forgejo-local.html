@@ -319,7 +319,7 @@
         };
       };
 
-      const fetchRepoRuns = useCallback(async (owner, repo) => {
+      const fetchRepoRuns = useCallback(async (owner, repo, onProgress) => {
         try {
           const allRuns = [];
           const PAGE_LIMIT = 50;
@@ -334,6 +334,8 @@
             for (const run of runs) {
               allRuns.push(normalizeRun(run));
             }
+
+            if (onProgress) onProgress(allRuns.length);
 
             if (runs.length < PAGE_LIMIT) break;
           }
@@ -390,16 +392,24 @@
           setDiscoveredRepos(matchingRepos);
 
           const allRunsCollected = [];
+          const maxRuns = config.maxRuns || 250;
+          const totalMaxRuns = matchingRepos.length * maxRuns;
+          let runsFetched = 0;
           for (let i = 0; i < matchingRepos.length; i++) {
             const repo = matchingRepos[i];
-            setProgress({ current: i + 1, total: matchingRepos.length, phase: 'fetching' });
+            setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
             addLog(`\ud83d\udce5 Lade Runs f\u00fcr: ${repo.full_name}`);
-            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
+            const baseRunsFetched = runsFetched;
+            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+              setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'fetching' });
+            });
+            runsFetched += runs.length;
             allRunsCollected.push(...runs.map(run => ({
               ...run, _repo: repo, _repoFullName: repo.full_name, _jobPath: getJobPath(repo.full_name, run),
             })));
           }
 
+          setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
           addLog(`\u2705 Insgesamt ${allRunsCollected.length} Runs geladen`);
           setAllRuns(allRunsCollected);
           setLastUpdate(new Date());
@@ -416,7 +426,9 @@
       const refreshRuns = useCallback(async () => {
         if (!config.baseUrl || !discoveredRepos.length || loading) return;
         setLoading(true);
-        setProgress({ current: 0, total: discoveredRepos.length, phase: 'refreshing' });
+        const maxRuns = config.maxRuns || 250;
+        const totalMaxRuns = discoveredRepos.length * maxRuns;
+        setProgress({ current: 0, total: totalMaxRuns, phase: 'refreshing' });
 
         const timeout = setTimeout(() => {
           setLoading(false);
@@ -426,10 +438,15 @@
 
         try {
           const allRunsCollected = [];
+          let runsFetched = 0;
           for (let i = 0; i < discoveredRepos.length; i++) {
             const repo = discoveredRepos[i];
-            setProgress({ current: i + 1, total: discoveredRepos.length, phase: 'refreshing' });
-            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name);
+            const baseRunsFetched = runsFetched;
+            setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'refreshing' });
+            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+              setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'refreshing' });
+            });
+            runsFetched += runs.length;
             allRunsCollected.push(...runs.map(run => ({
               ...run, _repo: repo, _repoFullName: repo.full_name, _jobPath: getJobPath(repo.full_name, run),
             })));
@@ -443,7 +460,7 @@
           setLoading(false);
           setProgress({ current: 0, total: 0, phase: 'idle' });
         }
-      }, [config.baseUrl, discoveredRepos, loading, fetchRepoRuns]);
+      }, [config.baseUrl, config.maxRuns, discoveredRepos, loading, fetchRepoRuns]);
 
       const filteredAndGroupedJobs = useMemo(() => {
         let workflowRegex;
@@ -702,8 +719,8 @@
                   <Icons.RefreshCw width={12} height={12} className="spinning" />
                   <span>
                     {progress.phase === 'discovering' && `Discovering orgs... ${progress.current}/${progress.total}`}
-                    {progress.phase === 'fetching' && `Fetching runs... ${progress.current}/${progress.total} repos`}
-                    {progress.phase === 'refreshing' && `Refreshing... ${progress.current}/${progress.total} repos`}
+                    {progress.phase === 'fetching' && `Fetching runs... ${progress.current}/${progress.total}`}
+                    {progress.phase === 'refreshing' && `Refreshing... ${progress.current}/${progress.total} runs`}
                   </span>
                   <span style={{ marginLeft: 'auto', opacity: 0.7 }}>{progress.total > 0 ? `${Math.round((progress.current / progress.total) * 100)}%` : ''}</span>
                 </div>
