@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, PlayCircle, Settings, Search, Trash2, ExternalLink, GitBranch, Activity, Filter, Regex, FolderSearch, ChevronDown, ChevronRight, User, GitCommit, MessageSquare, Sun, Moon } from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle, PlayCircle, Play, Settings, Search, Trash2, ExternalLink, GitBranch, Activity, Filter, Regex, FolderSearch, ChevronDown, ChevronRight, User, GitCommit, MessageSquare, Sun, Moon } from 'lucide-react';
 
 // Status mapping für Forgejo Actions
 const STATUS_MAP = {
@@ -769,6 +769,24 @@ export default function ForgejoDashboard() {
             <option value={30}>30s</option>
             <option value={60}>60s</option>
           </select>
+
+          <button
+            onClick={refreshRuns}
+            disabled={loading || discoveredRepos.length === 0}
+            title="Poll now"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '0.2rem',
+              color: '#22c55e',
+              cursor: loading ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              opacity: loading || discoveredRepos.length === 0 ? 0.4 : 0.8,
+            }}
+          >
+            <Play size={14} fill="#22c55e" />
+          </button>
 
           <button
             onClick={refreshRuns}
