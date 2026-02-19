@@ -358,20 +358,20 @@
             return allRuns;
           }
 
-          // Nur die Pages mit den neusten maxRuns laden (API liefert älteste zuerst)
-          const lastPage = Math.ceil(totalCount / PAGE_LIMIT);
-          const startPage = Math.max(1, Math.ceil((totalCount - maxRuns + 1) / PAGE_LIMIT));
+          // API liefert neueste zuerst (Page 1 = neueste Runs) → immer von vorne laden
+          const pagesToFetch = Math.ceil(maxRuns / PAGE_LIMIT);
 
-          for (let page = startPage; page <= lastPage; page++) {
+          for (let page = 1; page <= pagesToFetch; page++) {
             const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
             const runs = data.workflow_runs || data || [];
             if (runs.length === 0) break;
             for (const run of runs) allRuns.push(normalizeRun(run));
             if (onProgress) onProgress(allRuns.length);
+            if (runs.length < PAGE_LIMIT) break;
           }
 
-          // Auf maxRuns trimmen (neueste = Ende der aufsteigenden Liste)
-          return allRuns.slice(-maxRuns);
+          // Auf maxRuns trimmen (neueste = Anfang der absteigenden Liste)
+          return allRuns.slice(0, maxRuns);
         } catch (err) {
           if (!err.message.includes('404')) addLog(`\u26a0\ufe0f Runs f\u00fcr ${owner}/${repo}: ${err.message}`);
           return [];
