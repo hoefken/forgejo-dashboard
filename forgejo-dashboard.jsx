@@ -159,7 +159,7 @@ export default function ForgejoDashboard() {
     repoPattern: '.*',
     workflowPattern: '.*',
     branchPattern: '^main$',
-    maxRuns: 250,
+    maxRuns: 500,
     organizations: [],
   });
 
@@ -319,7 +319,7 @@ export default function ForgejoDashboard() {
     try {
       const allRuns = [];
       const PAGE_LIMIT = 50;
-      const maxRuns = config.maxRuns || 250;
+      const maxRuns = config.maxRuns || 500;
       const MAX_PAGES = Math.ceil(maxRuns / PAGE_LIMIT);
 
       for (let page = 1; page <= MAX_PAGES; page++) {
@@ -406,7 +406,7 @@ export default function ForgejoDashboard() {
       setDiscoveredRepos(matchingRepos);
 
       const allRunsCollected = [];
-      const maxRuns = config.maxRuns || 250;
+      const maxRuns = config.maxRuns || 500;
       const totalMaxRuns = matchingRepos.length * maxRuns;
       let runsFetched = 0;
 
@@ -1272,9 +1272,9 @@ export default function ForgejoDashboard() {
                 type="number"
                 min="50"
                 step="50"
-                value={config.maxRuns || 250}
-                onChange={(e) => setConfig(prev => ({ ...prev, maxRuns: parseInt(e.target.value) || 250 }))}
-                placeholder="250"
+                value={config.maxRuns || 500}
+                onChange={(e) => setConfig(prev => ({ ...prev, maxRuns: parseInt(e.target.value) || 500 }))}
+                placeholder="500"
                 style={{
                   width: '100%',
                   background: t.inputBg,

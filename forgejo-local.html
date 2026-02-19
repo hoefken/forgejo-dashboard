@@ -197,7 +197,7 @@
         repoPattern: '.*',
         workflowPattern: '.*',
         branchPattern: '^main$',
-        maxRuns: 250,
+        maxRuns: 500,
         organizations: [],
       });
 
@@ -336,7 +336,7 @@
         try {
           const allRuns = [];
           const PAGE_LIMIT = 50;
-          const maxRuns = config.maxRuns || 250;
+          const maxRuns = config.maxRuns || 500;
           const MAX_PAGES = Math.ceil(maxRuns / PAGE_LIMIT);
 
           for (let page = 1; page <= MAX_PAGES; page++) {
@@ -405,7 +405,7 @@
           setDiscoveredRepos(matchingRepos);
 
           const allRunsCollected = [];
-          const maxRuns = config.maxRuns || 250;
+          const maxRuns = config.maxRuns || 500;
           const totalMaxRuns = matchingRepos.length * maxRuns;
           let runsFetched = 0;
           for (let i = 0; i < matchingRepos.length; i++) {
@@ -730,7 +730,7 @@
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', color: t.textDim, marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Max Runs per Repo
                   </label>
-                  <input type="number" min="50" step="50" value={config.maxRuns || 250} onChange={e => setConfig(p => ({ ...p, maxRuns: parseInt(e.target.value) || 250 }))} placeholder="250" style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.borderLight}`, borderRadius: 4, padding: '0.6rem', color: '#22d3ee', fontSize: '0.8rem', fontFamily: 'monospace' }} />
+                  <input type="number" min="50" step="50" value={config.maxRuns || 500} onChange={e => setConfig(p => ({ ...p, maxRuns: parseInt(e.target.value) || 500 }))} placeholder="500" style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.borderLight}`, borderRadius: 4, padding: '0.6rem', color: '#22d3ee', fontSize: '0.8rem', fontFamily: 'monospace' }} />
                   <span style={{ display: 'block', fontSize: '0.6rem', color: t.textDimmest, marginTop: '0.3rem' }}>Max Runs pro Repo (in 50er-Schritten). H&ouml;her = mehr Workflows sichtbar, aber langsamer.</span>
                 </div>
 
