@@ -197,7 +197,7 @@
         repoPattern: '.*',
         workflowPattern: '.*',
         branchPattern: '^main$',
-        maxRuns: 250,
+        maxRuns: 500,
         organizations: [],
       });
 
@@ -332,28 +332,46 @@
         };
       };
 
-      const fetchRepoRuns = useCallback(async (owner, repo, onProgress) => {
+      const fetchRepoRuns = useCallback(async (owner, repo, onProgress, onProbe) => {
         try {
           const allRuns = [];
           const PAGE_LIMIT = 50;
-          const maxRuns = config.maxRuns || 250;
-          const MAX_PAGES = Math.ceil(maxRuns / PAGE_LIMIT);
+          const maxRuns = config.maxRuns || 500;
 
-          for (let page = 1; page <= MAX_PAGES; page++) {
+          // Testflight mit limit=1: total_count günstig ermitteln
+          const probe = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=1&limit=1`);
+          const totalCount = probe.total_count || 0;
+          if (onProbe) onProbe(totalCount);
+
+          if (totalCount === 0) {
+            // Keine Runs oder API ohne total_count → Fallback: sequentiell von Seite 1
+            const probeRuns = Array.isArray(probe) ? probe : (probe.workflow_runs || []);
+            if (probeRuns.length === 0) return allRuns;
+            for (let page = 1; page <= Math.ceil(maxRuns / PAGE_LIMIT); page++) {
+              const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
+              const runs = data.workflow_runs || data || [];
+              if (runs.length === 0) break;
+              for (const run of runs) allRuns.push(normalizeRun(run));
+              if (onProgress) onProgress(allRuns.length);
+              if (runs.length < PAGE_LIMIT) break;
+            }
+            return allRuns;
+          }
+
+          // Nur die Pages mit den neusten maxRuns laden (API liefert älteste zuerst)
+          const lastPage = Math.ceil(totalCount / PAGE_LIMIT);
+          const startPage = Math.max(1, Math.ceil((totalCount - maxRuns + 1) / PAGE_LIMIT));
+
+          for (let page = startPage; page <= lastPage; page++) {
             const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
             const runs = data.workflow_runs || data || [];
             if (runs.length === 0) break;
-
-            for (const run of runs) {
-              allRuns.push(normalizeRun(run));
-            }
-
+            for (const run of runs) allRuns.push(normalizeRun(run));
             if (onProgress) onProgress(allRuns.length);
-
-            if (runs.length < PAGE_LIMIT) break;
           }
 
-          return allRuns;
+          // Auf maxRuns trimmen (neueste = Ende der aufsteigenden Liste)
+          return allRuns.slice(-maxRuns);
         } catch (err) {
           if (!err.message.includes('404')) addLog(`\u26a0\ufe0f Runs f\u00fcr ${owner}/${repo}: ${err.message}`);
           return [];
@@ -405,16 +423,20 @@
           setDiscoveredRepos(matchingRepos);
 
           const allRunsCollected = [];
-          const maxRuns = config.maxRuns || 250;
-          const totalMaxRuns = matchingRepos.length * maxRuns;
+          const maxRuns = config.maxRuns || 500;
+          const actualTotals = matchingRepos.map(() => maxRuns);
+          const getTotal = () => actualTotals.reduce((a, b) => a + b, 0);
           let runsFetched = 0;
           for (let i = 0; i < matchingRepos.length; i++) {
             const repo = matchingRepos[i];
-            setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
+            setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
             addLog(`\ud83d\udce5 Lade Runs f\u00fcr: ${repo.full_name}`);
             const baseRunsFetched = runsFetched;
             const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
-              setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'fetching' });
+              setProgress({ current: baseRunsFetched + repoRunCount, total: getTotal(), phase: 'fetching' });
+            }, (totalCount) => {
+              actualTotals[i] = totalCount > 0 ? Math.min(totalCount, maxRuns) : maxRuns;
+              setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
             });
             runsFetched += runs.length;
             allRunsCollected.push(...runs.map(run => ({
@@ -422,7 +444,7 @@
             })));
           }
 
-          setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
+          setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
           addLog(`\u2705 Insgesamt ${allRunsCollected.length} Runs geladen`);
           setAllRuns(allRunsCollected);
           setLastUpdate(new Date());
@@ -439,9 +461,10 @@
       const refreshRuns = useCallback(async () => {
         if (!config.baseUrl || !discoveredRepos.length || loading) return;
         setLoading(true);
-        const maxRuns = config.maxRuns || 250;
-        const totalMaxRuns = discoveredRepos.length * maxRuns;
-        setProgress({ current: 0, total: totalMaxRuns, phase: 'refreshing' });
+        const maxRuns = config.maxRuns || 500;
+        const actualTotals = discoveredRepos.map(() => maxRuns);
+        const getTotal = () => actualTotals.reduce((a, b) => a + b, 0);
+        setProgress({ current: 0, total: getTotal(), phase: 'refreshing' });
 
         const timeout = setTimeout(() => {
           setLoading(false);
@@ -455,9 +478,12 @@
           for (let i = 0; i < discoveredRepos.length; i++) {
             const repo = discoveredRepos[i];
             const baseRunsFetched = runsFetched;
-            setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'refreshing' });
+            setProgress({ current: runsFetched, total: getTotal(), phase: 'refreshing' });
             const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
-              setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'refreshing' });
+              setProgress({ current: baseRunsFetched + repoRunCount, total: getTotal(), phase: 'refreshing' });
+            }, (totalCount) => {
+              actualTotals[i] = totalCount > 0 ? Math.min(totalCount, maxRuns) : maxRuns;
+              setProgress({ current: runsFetched, total: getTotal(), phase: 'refreshing' });
             });
             runsFetched += runs.length;
             allRunsCollected.push(...runs.map(run => ({
@@ -730,7 +756,7 @@
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', color: t.textDim, marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Max Runs per Repo
                   </label>
-                  <input type="number" min="50" step="50" value={config.maxRuns || 250} onChange={e => setConfig(p => ({ ...p, maxRuns: parseInt(e.target.value) || 250 }))} placeholder="250" style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.borderLight}`, borderRadius: 4, padding: '0.6rem', color: '#22d3ee', fontSize: '0.8rem', fontFamily: 'monospace' }} />
+                  <input type="number" min="50" step="50" value={config.maxRuns || 500} onChange={e => setConfig(p => ({ ...p, maxRuns: parseInt(e.target.value) || 500 }))} placeholder="500" style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.borderLight}`, borderRadius: 4, padding: '0.6rem', color: '#22d3ee', fontSize: '0.8rem', fontFamily: 'monospace' }} />
                   <span style={{ display: 'block', fontSize: '0.6rem', color: t.textDimmest, marginTop: '0.3rem' }}>Max Runs pro Repo (in 50er-Schritten). H&ouml;her = mehr Workflows sichtbar, aber langsamer.</span>
                 </div>
 
