@@ -314,39 +314,46 @@ export default function ForgejoDashboard() {
     };
   };
 
-  // Workflow Runs für ein Repo abrufen (paginiert, Seitenzahl via total_count ermittelt)
+  // Workflow Runs für ein Repo abrufen (Testflight→total_count→neueste Pages)
   const fetchRepoRuns = useCallback(async (owner, repo, onProgress) => {
     try {
       const allRuns = [];
       const PAGE_LIMIT = 50;
       const maxRuns = config.maxRuns || 500;
 
-      // Seite 1 holen und total_count auslesen
-      const firstData = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=1&limit=${PAGE_LIMIT}`);
-      const totalCount = firstData.total_count || 0;
-      const firstRuns = firstData.workflow_runs || firstData || [];
-      if (firstRuns.length === 0) return allRuns;
+      // Testflight mit limit=1: total_count günstig ermitteln
+      const probe = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=1&limit=1`);
+      const totalCount = probe.total_count || 0;
 
-      for (const run of firstRuns) allRuns.push(normalizeRun(run));
-      if (onProgress) onProgress(allRuns.length);
+      if (totalCount === 0) {
+        // Keine Runs oder API ohne total_count → Fallback: sequentiell von Seite 1
+        const probeRuns = Array.isArray(probe) ? probe : (probe.workflow_runs || []);
+        if (probeRuns.length === 0) return allRuns;
+        for (let page = 1; page <= Math.ceil(maxRuns / PAGE_LIMIT); page++) {
+          const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
+          const runs = data.workflow_runs || data || [];
+          if (runs.length === 0) break;
+          for (const run of runs) allRuns.push(normalizeRun(run));
+          if (onProgress) onProgress(allRuns.length);
+          if (runs.length < PAGE_LIMIT) break;
+        }
+        return allRuns;
+      }
 
-      // Seitenzahl: total_count nutzen wenn verfügbar, sonst maxRuns als Fallback
-      const runsToFetch = totalCount > 0 ? Math.min(totalCount, maxRuns) : maxRuns;
-      const totalPages = Math.ceil(runsToFetch / PAGE_LIMIT);
+      // Nur die Pages mit den neusten maxRuns laden (API liefert älteste zuerst)
+      const lastPage = Math.ceil(totalCount / PAGE_LIMIT);
+      const startPage = Math.max(1, Math.ceil((totalCount - maxRuns + 1) / PAGE_LIMIT));
 
-      for (let page = 2; page <= totalPages; page++) {
-        if (firstRuns.length < PAGE_LIMIT) break; // erste Seite war bereits die letzte
+      for (let page = startPage; page <= lastPage; page++) {
         const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
         const runs = data.workflow_runs || data || [];
         if (runs.length === 0) break;
-
         for (const run of runs) allRuns.push(normalizeRun(run));
         if (onProgress) onProgress(allRuns.length);
-
-        if (runs.length < PAGE_LIMIT) break;
       }
 
-      return allRuns;
+      // Auf maxRuns trimmen (neueste = Ende der aufsteigenden Liste)
+      return allRuns.slice(-maxRuns);
     } catch (err) {
       if (!err.message.includes('404')) {
         addLog(`⚠️ Runs für ${owner}/${repo}: ${err.message}`);
