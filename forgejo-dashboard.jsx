@@ -315,7 +315,7 @@ export default function ForgejoDashboard() {
   };
 
   // Workflow Runs für ein Repo abrufen (Testflight→total_count→neueste Pages)
-  const fetchRepoRuns = useCallback(async (owner, repo, onProgress) => {
+  const fetchRepoRuns = useCallback(async (owner, repo, onProgress, onProbe) => {
     try {
       const allRuns = [];
       const PAGE_LIMIT = 50;
@@ -324,6 +324,7 @@ export default function ForgejoDashboard() {
       // Testflight mit limit=1: total_count günstig ermitteln
       const probe = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=1&limit=1`);
       const totalCount = probe.total_count || 0;
+      if (onProbe) onProbe(totalCount);
 
       if (totalCount === 0) {
         // Keine Runs oder API ohne total_count → Fallback: sequentiell von Seite 1
@@ -423,16 +424,20 @@ export default function ForgejoDashboard() {
 
       const allRunsCollected = [];
       const maxRuns = config.maxRuns || 500;
-      const totalMaxRuns = matchingRepos.length * maxRuns;
+      const actualTotals = matchingRepos.map(() => maxRuns);
+      const getTotal = () => actualTotals.reduce((a, b) => a + b, 0);
       let runsFetched = 0;
 
       for (let i = 0; i < matchingRepos.length; i++) {
         const repo = matchingRepos[i];
-        setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
+        setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
         addLog(`📥 Lade Runs für: ${repo.full_name}`);
         const baseRunsFetched = runsFetched;
         const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
-          setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'fetching' });
+          setProgress({ current: baseRunsFetched + repoRunCount, total: getTotal(), phase: 'fetching' });
+        }, (totalCount) => {
+          actualTotals[i] = totalCount > 0 ? Math.min(totalCount, maxRuns) : maxRuns;
+          setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
         });
 
         runsFetched += runs.length;
@@ -447,7 +452,7 @@ export default function ForgejoDashboard() {
         allRunsCollected.push(...enrichedRuns);
       }
 
-      setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'fetching' });
+      setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
       addLog(`✅ Insgesamt ${allRunsCollected.length} Runs geladen`);
       setAllRuns(allRunsCollected);
       setLastUpdate(new Date());
@@ -468,8 +473,9 @@ export default function ForgejoDashboard() {
 
     setLoading(true);
     const maxRuns = config.maxRuns || 500;
-    const totalMaxRuns = discoveredRepos.length * maxRuns;
-    setProgress({ current: 0, total: totalMaxRuns, phase: 'refreshing' });
+    const actualTotals = discoveredRepos.map(() => maxRuns);
+    const getTotal = () => actualTotals.reduce((a, b) => a + b, 0);
+    setProgress({ current: 0, total: getTotal(), phase: 'refreshing' });
 
     const timeout = setTimeout(() => {
       setLoading(false);
@@ -484,9 +490,12 @@ export default function ForgejoDashboard() {
       for (let i = 0; i < discoveredRepos.length; i++) {
         const repo = discoveredRepos[i];
         const baseRunsFetched = runsFetched;
-        setProgress({ current: runsFetched, total: totalMaxRuns, phase: 'refreshing' });
+        setProgress({ current: runsFetched, total: getTotal(), phase: 'refreshing' });
         const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
-          setProgress({ current: baseRunsFetched + repoRunCount, total: totalMaxRuns, phase: 'refreshing' });
+          setProgress({ current: baseRunsFetched + repoRunCount, total: getTotal(), phase: 'refreshing' });
+        }, (totalCount) => {
+          actualTotals[i] = totalCount > 0 ? Math.min(totalCount, maxRuns) : maxRuns;
+          setProgress({ current: runsFetched, total: getTotal(), phase: 'refreshing' });
         });
         runsFetched += runs.length;
         const enrichedRuns = runs.map(run => ({
