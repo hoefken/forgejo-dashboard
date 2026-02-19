@@ -439,7 +439,7 @@
       const refreshRuns = useCallback(async () => {
         if (!config.baseUrl || !discoveredRepos.length || loading) return;
         setLoading(true);
-        const maxRuns = config.maxRuns || 250;
+        const maxRuns = config.maxRuns || 500;
         const totalMaxRuns = discoveredRepos.length * maxRuns;
         setProgress({ current: 0, total: totalMaxRuns, phase: 'refreshing' });
 

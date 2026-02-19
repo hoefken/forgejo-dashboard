@@ -451,7 +451,7 @@ export default function ForgejoDashboard() {
     if (!config.baseUrl || discoveredRepos.length === 0 || loading) return;
 
     setLoading(true);
-    const maxRuns = config.maxRuns || 250;
+    const maxRuns = config.maxRuns || 500;
     const totalMaxRuns = discoveredRepos.length * maxRuns;
     setProgress({ current: 0, total: totalMaxRuns, phase: 'refreshing' });
 
