@@ -161,10 +161,12 @@ export default function ForgejoDashboard() {
     branchPattern: '^main$',
     maxRuns: 500,
     organizations: [],
+    hideDeletedWorkflows: true,
   });
 
   const [discoveredRepos, setDiscoveredRepos] = useState([]);
   const [allRuns, setAllRuns] = useState([]);
+  const [existingWorkflows, setExistingWorkflows] = useState({});
   const [loading, setLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [error, setError] = useState(null);
@@ -217,6 +219,7 @@ export default function ForgejoDashboard() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        if (parsed.hideDeletedWorkflows === undefined) parsed.hideDeletedWorkflows = true;
         setConfig(parsed);
         // Only auto-hide settings if there's no persisted UI preference for it
         const hasUiPrefs = localStorage.getItem('forgejo-dashboard-ui-prefs');
@@ -286,6 +289,27 @@ export default function ForgejoDashboard() {
     }
 
     return repos;
+  }, [apiCall]);
+
+  // Workflow-Dateien aus dem Default-Branch eines Repos abrufen
+  const fetchWorkflowFiles = useCallback(async (owner, repo, defaultBranch) => {
+    const ref = encodeURIComponent(defaultBranch || 'main');
+    const names = new Set();
+    for (const dir of ['.gitea/workflows', '.github/workflows']) {
+      try {
+        const data = await apiCall(`/repos/${owner}/${repo}/contents/${dir}?ref=${ref}`);
+        if (Array.isArray(data)) {
+          for (const f of data) {
+            if (f.type === 'file' && /\.(ya?ml)$/i.test(f.name)) {
+              names.add(f.name.replace(/\.(yml|yaml)$/i, ''));
+            }
+          }
+        }
+      } catch (err) {
+        // 404 wenn das Verzeichnis nicht existiert – ignorieren
+      }
+    }
+    return names;
   }, [apiCall]);
 
   // Repos per Suche finden
@@ -427,18 +451,24 @@ export default function ForgejoDashboard() {
       const actualTotals = matchingRepos.map(() => maxRuns);
       const getTotal = () => actualTotals.reduce((a, b) => a + b, 0);
       let runsFetched = 0;
+      const workflowsByRepo = {};
 
       for (let i = 0; i < matchingRepos.length; i++) {
         const repo = matchingRepos[i];
         setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
         addLog(`📥 Lade Runs für: ${repo.full_name}`);
+        const owner = repo.owner.login || repo.owner.username;
         const baseRunsFetched = runsFetched;
-        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+        const runs = await fetchRepoRuns(owner, repo.name, (repoRunCount) => {
           setProgress({ current: baseRunsFetched + repoRunCount, total: getTotal(), phase: 'fetching' });
         }, (totalCount) => {
           actualTotals[i] = totalCount > 0 ? Math.min(totalCount, maxRuns) : maxRuns;
           setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
         });
+
+        const existing = await fetchWorkflowFiles(owner, repo.name, repo.default_branch);
+        workflowsByRepo[repo.full_name] = existing;
+        addLog(`   → ${existing.size} Workflow-Datei(en) auf ${repo.default_branch || 'main'}`);
 
         runsFetched += runs.length;
         const enrichedRuns = runs.map(run => ({
@@ -455,6 +485,7 @@ export default function ForgejoDashboard() {
       setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
       addLog(`✅ Insgesamt ${allRunsCollected.length} Runs geladen`);
       setAllRuns(allRunsCollected);
+      setExistingWorkflows(workflowsByRepo);
       setLastUpdate(new Date());
 
     } catch (err) {
@@ -465,7 +496,7 @@ export default function ForgejoDashboard() {
       setDiscovering(false);
       setProgress({ current: 0, total: 0, phase: 'idle' });
     }
-  }, [config, discovering, fetchOrgRepos, searchRepos, fetchRepoRuns]);
+  }, [config, discovering, fetchOrgRepos, searchRepos, fetchRepoRuns, fetchWorkflowFiles]);
 
   // Nur Runs aktualisieren (schneller)
   const refreshRuns = useCallback(async () => {
@@ -486,17 +517,20 @@ export default function ForgejoDashboard() {
     try {
       const allRunsCollected = [];
       let runsFetched = 0;
+      const workflowsByRepo = {};
 
       for (let i = 0; i < discoveredRepos.length; i++) {
         const repo = discoveredRepos[i];
+        const owner = repo.owner.login || repo.owner.username;
         const baseRunsFetched = runsFetched;
         setProgress({ current: runsFetched, total: getTotal(), phase: 'refreshing' });
-        const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+        const runs = await fetchRepoRuns(owner, repo.name, (repoRunCount) => {
           setProgress({ current: baseRunsFetched + repoRunCount, total: getTotal(), phase: 'refreshing' });
         }, (totalCount) => {
           actualTotals[i] = totalCount > 0 ? Math.min(totalCount, maxRuns) : maxRuns;
           setProgress({ current: runsFetched, total: getTotal(), phase: 'refreshing' });
         });
+        workflowsByRepo[repo.full_name] = await fetchWorkflowFiles(owner, repo.name, repo.default_branch);
         runsFetched += runs.length;
         const enrichedRuns = runs.map(run => ({
           ...run,
@@ -509,6 +543,7 @@ export default function ForgejoDashboard() {
       }
 
       setAllRuns(allRunsCollected);
+      setExistingWorkflows(workflowsByRepo);
       setLastUpdate(new Date());
     } catch (err) {
       setError(err.message);
@@ -517,7 +552,7 @@ export default function ForgejoDashboard() {
       setLoading(false);
       setProgress({ current: 0, total: 0, phase: 'idle' });
     }
-  }, [config.baseUrl, config.maxRuns, discoveredRepos, loading, fetchRepoRuns]);
+  }, [config.baseUrl, config.maxRuns, discoveredRepos, loading, fetchRepoRuns, fetchWorkflowFiles]);
 
   // Nach Workflow-Pattern filtern
   const filteredAndGroupedJobs = useMemo(() => {
@@ -535,9 +570,15 @@ export default function ForgejoDashboard() {
       branchRegex = null;
     }
 
+    const hideDeleted = config.hideDeletedWorkflows !== false;
+
     const filtered = allRuns.filter(run => {
       const matchesWorkflow = workflowRegex.test(run._workflowName) || workflowRegex.test(run._jobPath);
       const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
+      if (hideDeleted) {
+        const existing = existingWorkflows[run._repoFullName];
+        if (existing && !existing.has(run._workflowName)) return false;
+      }
       return matchesWorkflow && matchesBranch;
     });
 
@@ -574,7 +615,7 @@ export default function ForgejoDashboard() {
     });
 
     return jobs;
-  }, [allRuns, config.workflowPattern, config.branchPattern]);
+  }, [allRuns, config.workflowPattern, config.branchPattern, config.hideDeletedWorkflows, existingWorkflows]);
 
   // Auto-refresh
   useEffect(() => {
@@ -1276,6 +1317,35 @@ export default function ForgejoDashboard() {
                 marginTop: '0.3rem',
               }}>
                 Default: ^main$ (nur main-Branch). Leer lassen für alle Branches.
+              </span>
+            </div>
+
+            {/* Hide deleted workflows */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.8rem',
+                color: t.text,
+                cursor: 'pointer',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={config.hideDeletedWorkflows !== false}
+                  onChange={(e) => setConfig(prev => ({ ...prev, hideDeletedWorkflows: e.target.checked }))}
+                  style={{ cursor: 'pointer' }}
+                />
+                Gelöschte Workflows ausblenden
+              </label>
+              <span style={{
+                display: 'block',
+                fontSize: '0.6rem',
+                color: t.textDimmest,
+                marginTop: '0.3rem',
+                marginLeft: '1.4rem',
+              }}>
+                Versteckt Workflows, deren YAML-Datei nicht mehr im Default-Branch des Repos existiert.
               </span>
             </div>
 
