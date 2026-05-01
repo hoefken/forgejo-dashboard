@@ -295,7 +295,7 @@ export default function ForgejoDashboard() {
   const fetchWorkflowFiles = useCallback(async (owner, repo, defaultBranch) => {
     const ref = encodeURIComponent(defaultBranch || 'main');
     const names = new Set();
-    for (const dir of ['.gitea/workflows', '.github/workflows']) {
+    for (const dir of ['.forgejo/workflows', '.gitea/workflows', '.github/workflows']) {
       try {
         const data = await apiCall(`/repos/${owner}/${repo}/contents/${dir}?ref=${ref}`);
         if (Array.isArray(data)) {
@@ -577,7 +577,9 @@ export default function ForgejoDashboard() {
       const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
       if (hideDeleted) {
         const existing = existingWorkflows[run._repoFullName];
-        if (existing && !existing.has(run._workflowName)) return false;
+        // Nur filtern, wenn wir tatsächlich Workflows gefunden haben –
+        // sonst (API-Fehler, unbekanntes Verzeichnis) lieber nichts ausblenden
+        if (existing && existing.size > 0 && !existing.has(run._workflowName)) return false;
       }
       return matchesWorkflow && matchesBranch;
     });
