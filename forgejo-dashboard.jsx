@@ -93,6 +93,7 @@ const formatDuration = (start, end) => {
   const endDate = end ? new Date(end) : new Date();
   const diff = Math.floor((endDate - startDate) / 1000);
 
+  if (diff < 0) return end ? '-' : 'running';
   if (diff < 60) return `${diff}s`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`;
   return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
