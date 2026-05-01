@@ -140,6 +140,7 @@
     const formatDuration = (start, end) => {
       if (!start) return '-';
       const diff = Math.floor((new Date(end || Date.now()) - new Date(start)) / 1000);
+      if (diff < 0) return end ? '-' : 'running';
       if (diff < 60) return `${diff}s`;
       if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`;
       return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
