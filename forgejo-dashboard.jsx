@@ -176,7 +176,17 @@ export default function ForgejoDashboard() {
 
   const [discoveredRepos, setDiscoveredRepos] = useState([]);
   const [allRuns, setAllRuns] = useState([]);
-  const [existingWorkflows, setExistingWorkflows] = useState({});
+  const [existingWorkflows, setExistingWorkflows] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('forgejo-dashboard-existing-workflows'));
+      if (raw && typeof raw === 'object') {
+        const result = {};
+        for (const [k, v] of Object.entries(raw)) result[k] = new Set(Array.isArray(v) ? v : []);
+        return result;
+      }
+    } catch {}
+    return {};
+  });
   const [loading, setLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [error, setError] = useState(null);
@@ -217,6 +227,17 @@ export default function ForgejoDashboard() {
   useEffect(() => {
     localStorage.setItem('forgejo-dashboard-workflow-renames', JSON.stringify(workflowRenames));
   }, [workflowRenames]);
+
+  // Save existing-workflows cache to localStorage (Sets als Arrays)
+  useEffect(() => {
+    try {
+      const serializable = {};
+      for (const [k, v] of Object.entries(existingWorkflows)) {
+        serializable[k] = v instanceof Set ? Array.from(v) : [];
+      }
+      localStorage.setItem('forgejo-dashboard-existing-workflows', JSON.stringify(serializable));
+    } catch {}
+  }, [existingWorkflows]);
 
   // Save UI preferences to localStorage
   useEffect(() => {
@@ -301,24 +322,44 @@ export default function ForgejoDashboard() {
     return repos;
   }, [apiCall]);
 
-  // Workflow-Dateien aus dem Default-Branch eines Repos abrufen
+  // Liste aktiver Workflows eines Repos abrufen (aus dem Default-Branch).
+  // Liefert ein Set mit allen möglichen Identifiern (Name, ID, Dateiname mit/ohne Endung),
+  // damit ein Run unabhängig vom verfügbaren Feld zugeordnet werden kann.
   const fetchWorkflowFiles = useCallback(async (owner, repo, defaultBranch) => {
-    const ref = encodeURIComponent(defaultBranch || 'main');
     const names = new Set();
-    for (const dir of ['.forgejo/workflows', '.gitea/workflows', '.github/workflows']) {
-      try {
-        const data = await apiCall(`/repos/${owner}/${repo}/contents/${dir}?ref=${ref}`);
-        if (Array.isArray(data)) {
-          for (const f of data) {
-            if (f.type === 'file' && /\.(ya?ml)$/i.test(f.name)) {
-              names.add(f.name.replace(/\.(yml|yaml)$/i, ''));
+    const addAllVariants = (raw) => {
+      if (!raw) return;
+      const s = String(raw);
+      names.add(s);
+      names.add(s.replace(/\.(yml|yaml)$/i, ''));
+    };
+
+    // 1. Bevorzugt: /actions/workflows liefert die canonische Liste
+    try {
+      const data = await apiCall(`/repos/${owner}/${repo}/actions/workflows`);
+      const workflows = data?.workflows || (Array.isArray(data) ? data : []);
+      for (const w of workflows) {
+        addAllVariants(w.id);
+        addAllVariants(w.name);
+        if (w.path) addAllVariants(w.path.split('/').pop());
+      }
+    } catch {}
+
+    // 2. Fallback: Verzeichnislisten auslesen
+    if (names.size === 0) {
+      const ref = encodeURIComponent(defaultBranch || 'main');
+      for (const dir of ['.forgejo/workflows', '.gitea/workflows', '.github/workflows']) {
+        try {
+          const data = await apiCall(`/repos/${owner}/${repo}/contents/${dir}?ref=${ref}`);
+          if (Array.isArray(data)) {
+            for (const f of data) {
+              if (f.type === 'file' && /\.(ya?ml)$/i.test(f.name)) addAllVariants(f.name);
             }
           }
-        }
-      } catch (err) {
-        // 404 wenn das Verzeichnis nicht existiert – ignorieren
+        } catch {}
       }
     }
+
     return names;
   }, [apiCall]);
 
@@ -587,11 +628,10 @@ export default function ForgejoDashboard() {
       const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
       if (hideDeleted) {
         const existing = existingWorkflows[run._repoFullName];
-        const filename = getWorkflowFilename(run);
-        // Nur filtern wenn wir den Dateinamen sicher kennen UND wir Workflow-
-        // Dateien gefunden haben. Sonst (API-Fehler, unbekanntes Verzeichnis,
-        // fehlendes workflow_ref) lieber nichts ausblenden.
-        if (filename && existing && existing.size > 0 && !existing.has(filename)) return false;
+        if (existing && existing.size > 0) {
+          const candidates = [run.workflow_id, run.name, run._workflowName, getWorkflowFilename(run)].filter(Boolean);
+          if (!candidates.some(c => existing.has(String(c)))) return false;
+        }
       }
       return matchesWorkflow && matchesBranch;
     });
@@ -630,34 +670,6 @@ export default function ForgejoDashboard() {
 
     return jobs;
   }, [allRuns, config.workflowPattern, config.branchPattern, config.hideDeletedWorkflows, existingWorkflows]);
-
-  // Lazy backfill: wenn die Checkbox aktiv ist und für entdeckte Repos
-  // noch keine Workflow-Dateiliste geladen wurde, jetzt nachholen –
-  // damit der Toggle ohne erneutes Discover sofort wirkt.
-  useEffect(() => {
-    if (!config.hideDeletedWorkflows) return;
-    if (discoveredRepos.length === 0) return;
-
-    const missing = discoveredRepos.filter(r => !(r.full_name in existingWorkflows));
-    if (missing.length === 0) return;
-
-    let cancelled = false;
-    (async () => {
-      const updates = {};
-      for (const repo of missing) {
-        if (cancelled) return;
-        const owner = repo.owner.login || repo.owner.username;
-        try {
-          updates[repo.full_name] = await fetchWorkflowFiles(owner, repo.name, repo.default_branch);
-        } catch {
-          updates[repo.full_name] = new Set();
-        }
-      }
-      if (!cancelled) setExistingWorkflows(prev => ({ ...prev, ...updates }));
-    })();
-
-    return () => { cancelled = true; };
-  }, [config.hideDeletedWorkflows, discoveredRepos, existingWorkflows, fetchWorkflowFiles]);
 
   // Auto-refresh
   useEffect(() => {

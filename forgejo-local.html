@@ -212,7 +212,17 @@
 
       const [discoveredRepos, setDiscoveredRepos] = useState([]);
       const [allRuns, setAllRuns] = useState([]);
-      const [existingWorkflows, setExistingWorkflows] = useState({});
+      const [existingWorkflows, setExistingWorkflows] = useState(() => {
+        try {
+          const raw = JSON.parse(localStorage.getItem('forgejo-dashboard-existing-workflows'));
+          if (raw && typeof raw === 'object') {
+            const result = {};
+            for (const [k, v] of Object.entries(raw)) result[k] = new Set(Array.isArray(v) ? v : []);
+            return result;
+          }
+        } catch {}
+        return {};
+      });
       const [loading, setLoading] = useState(false);
       const [discovering, setDiscovering] = useState(false);
       const [error, setError] = useState(null);
@@ -248,6 +258,16 @@
       useEffect(() => {
         localStorage.setItem('forgejo-dashboard-workflow-renames', JSON.stringify(workflowRenames));
       }, [workflowRenames]);
+
+      useEffect(() => {
+        try {
+          const serializable = {};
+          for (const [k, v] of Object.entries(existingWorkflows)) {
+            serializable[k] = v instanceof Set ? Array.from(v) : [];
+          }
+          localStorage.setItem('forgejo-dashboard-existing-workflows', JSON.stringify(serializable));
+        } catch {}
+      }, [existingWorkflows]);
 
       useEffect(() => {
         localStorage.setItem('forgejo-dashboard-ui-prefs', JSON.stringify({ showSettings, autoRefresh, viewMode }));
@@ -319,20 +339,38 @@
       }, [apiCall]);
 
       const fetchWorkflowFiles = useCallback(async (owner, repo, defaultBranch) => {
-        const ref = encodeURIComponent(defaultBranch || 'main');
         const names = new Set();
-        for (const dir of ['.forgejo/workflows', '.gitea/workflows', '.github/workflows']) {
-          try {
-            const data = await apiCall(`/repos/${owner}/${repo}/contents/${dir}?ref=${ref}`);
-            if (Array.isArray(data)) {
-              for (const f of data) {
-                if (f.type === 'file' && /\.(ya?ml)$/i.test(f.name)) {
-                  names.add(f.name.replace(/\.(yml|yaml)$/i, ''));
+        const addAllVariants = (raw) => {
+          if (!raw) return;
+          const s = String(raw);
+          names.add(s);
+          names.add(s.replace(/\.(yml|yaml)$/i, ''));
+        };
+
+        try {
+          const data = await apiCall(`/repos/${owner}/${repo}/actions/workflows`);
+          const workflows = data?.workflows || (Array.isArray(data) ? data : []);
+          for (const w of workflows) {
+            addAllVariants(w.id);
+            addAllVariants(w.name);
+            if (w.path) addAllVariants(w.path.split('/').pop());
+          }
+        } catch {}
+
+        if (names.size === 0) {
+          const ref = encodeURIComponent(defaultBranch || 'main');
+          for (const dir of ['.forgejo/workflows', '.gitea/workflows', '.github/workflows']) {
+            try {
+              const data = await apiCall(`/repos/${owner}/${repo}/contents/${dir}?ref=${ref}`);
+              if (Array.isArray(data)) {
+                for (const f of data) {
+                  if (f.type === 'file' && /\.(ya?ml)$/i.test(f.name)) addAllVariants(f.name);
                 }
               }
-            }
-          } catch (err) { /* 404 ignorieren */ }
+            } catch {}
+          }
         }
+
         return names;
       }, [apiCall]);
 
@@ -555,9 +593,10 @@
           const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
           if (hideDeleted) {
             const existing = existingWorkflows[run._repoFullName];
-            const filename = getWorkflowFilename(run);
-            // Nur filtern wenn wir den Dateinamen sicher aus workflow_ref kennen
-            if (filename && existing && existing.size > 0 && !existing.has(filename)) return false;
+            if (existing && existing.size > 0) {
+              const candidates = [run.workflow_id, run.name, wfName, getWorkflowFilename(run)].filter(Boolean);
+              if (!candidates.some(c => existing.has(String(c)))) return false;
+            }
           }
           return matchesWorkflow && matchesBranch;
         });
@@ -588,30 +627,6 @@
           return sB.priority - sA.priority;
         });
       }, [allRuns, config.workflowPattern, config.branchPattern, config.hideDeletedWorkflows, existingWorkflows]);
-
-      // Lazy backfill: Workflow-Dateiliste laden sobald Checkbox aktiv ist
-      useEffect(() => {
-        if (!config.hideDeletedWorkflows || !discoveredRepos.length) return;
-        const missing = discoveredRepos.filter(r => !(r.full_name in existingWorkflows));
-        if (!missing.length) return;
-
-        let cancelled = false;
-        (async () => {
-          const updates = {};
-          for (const repo of missing) {
-            if (cancelled) return;
-            const owner = repo.owner.login || repo.owner.username;
-            try {
-              updates[repo.full_name] = await fetchWorkflowFiles(owner, repo.name, repo.default_branch);
-            } catch {
-              updates[repo.full_name] = new Set();
-            }
-          }
-          if (!cancelled) setExistingWorkflows(prev => ({ ...prev, ...updates }));
-        })();
-
-        return () => { cancelled = true; };
-      }, [config.hideDeletedWorkflows, discoveredRepos, existingWorkflows, fetchWorkflowFiles]);
 
       useEffect(() => {
         if (!discoveredRepos.length || !config.baseUrl || !autoRefresh) return;
