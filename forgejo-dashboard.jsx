@@ -631,6 +631,34 @@ export default function ForgejoDashboard() {
     return jobs;
   }, [allRuns, config.workflowPattern, config.branchPattern, config.hideDeletedWorkflows, existingWorkflows]);
 
+  // Lazy backfill: wenn die Checkbox aktiv ist und für entdeckte Repos
+  // noch keine Workflow-Dateiliste geladen wurde, jetzt nachholen –
+  // damit der Toggle ohne erneutes Discover sofort wirkt.
+  useEffect(() => {
+    if (!config.hideDeletedWorkflows) return;
+    if (discoveredRepos.length === 0) return;
+
+    const missing = discoveredRepos.filter(r => !(r.full_name in existingWorkflows));
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const updates = {};
+      for (const repo of missing) {
+        if (cancelled) return;
+        const owner = repo.owner.login || repo.owner.username;
+        try {
+          updates[repo.full_name] = await fetchWorkflowFiles(owner, repo.name, repo.default_branch);
+        } catch {
+          updates[repo.full_name] = new Set();
+        }
+      }
+      if (!cancelled) setExistingWorkflows(prev => ({ ...prev, ...updates }));
+    })();
+
+    return () => { cancelled = true; };
+  }, [config.hideDeletedWorkflows, discoveredRepos, existingWorkflows, fetchWorkflowFiles]);
+
   // Auto-refresh
   useEffect(() => {
     if (discoveredRepos.length === 0 || !config.baseUrl || autoRefresh === 0) return;

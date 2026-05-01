@@ -589,6 +589,30 @@
         });
       }, [allRuns, config.workflowPattern, config.branchPattern, config.hideDeletedWorkflows, existingWorkflows]);
 
+      // Lazy backfill: Workflow-Dateiliste laden sobald Checkbox aktiv ist
+      useEffect(() => {
+        if (!config.hideDeletedWorkflows || !discoveredRepos.length) return;
+        const missing = discoveredRepos.filter(r => !(r.full_name in existingWorkflows));
+        if (!missing.length) return;
+
+        let cancelled = false;
+        (async () => {
+          const updates = {};
+          for (const repo of missing) {
+            if (cancelled) return;
+            const owner = repo.owner.login || repo.owner.username;
+            try {
+              updates[repo.full_name] = await fetchWorkflowFiles(owner, repo.name, repo.default_branch);
+            } catch {
+              updates[repo.full_name] = new Set();
+            }
+          }
+          if (!cancelled) setExistingWorkflows(prev => ({ ...prev, ...updates }));
+        })();
+
+        return () => { cancelled = true; };
+      }, [config.hideDeletedWorkflows, discoveredRepos, existingWorkflows, fetchWorkflowFiles]);
+
       useEffect(() => {
         if (!discoveredRepos.length || !config.baseUrl || !autoRefresh) return;
         const interval = setInterval(refreshRuns, autoRefresh * 1000);
