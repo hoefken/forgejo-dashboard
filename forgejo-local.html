@@ -162,6 +162,14 @@
       return run.name || run.workflow_id || 'unknown';
     };
 
+    const getWorkflowFilename = (run) => {
+      if (run.workflow_ref) {
+        const match = run.workflow_ref.match(/workflows\/([^@]+)/);
+        if (match) return match[1].replace(/\.(yml|yaml)$/, '');
+      }
+      return null;
+    };
+
     const getJobPath = (repoFullName, run) => `${repoFullName}/${getWorkflowName(run)}`;
 
     const truncateMessage = (msg, maxLength = 60) => {
@@ -547,8 +555,9 @@
           const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
           if (hideDeleted) {
             const existing = existingWorkflows[run._repoFullName];
-            // Nur filtern wenn wir tatsächlich Workflows gefunden haben
-            if (existing && existing.size > 0 && !existing.has(wfName)) return false;
+            const filename = getWorkflowFilename(run);
+            // Nur filtern wenn wir den Dateinamen sicher aus workflow_ref kennen
+            if (filename && existing && existing.size > 0 && !existing.has(filename)) return false;
           }
           return matchesWorkflow && matchesBranch;
         });

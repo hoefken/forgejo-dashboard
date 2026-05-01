@@ -121,6 +121,16 @@ const getWorkflowName = (run) => {
   return 'unknown';
 };
 
+// Liefert nur den Datei-basierten Workflow-Namen (ohne Fallback auf den YAML-Namen).
+// Wird zum sicheren Vergleich gegen vorhandene Workflow-Dateien benutzt.
+const getWorkflowFilename = (run) => {
+  if (run.workflow_ref) {
+    const match = run.workflow_ref.match(/workflows\/([^@]+)/);
+    if (match) return match[1].replace(/\.(yml|yaml)$/, '');
+  }
+  return null;
+};
+
 // Commit Message kürzen
 const truncateMessage = (msg, maxLength = 60) => {
   if (!msg) return '-';
@@ -577,9 +587,11 @@ export default function ForgejoDashboard() {
       const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
       if (hideDeleted) {
         const existing = existingWorkflows[run._repoFullName];
-        // Nur filtern, wenn wir tatsächlich Workflows gefunden haben –
-        // sonst (API-Fehler, unbekanntes Verzeichnis) lieber nichts ausblenden
-        if (existing && existing.size > 0 && !existing.has(run._workflowName)) return false;
+        const filename = getWorkflowFilename(run);
+        // Nur filtern wenn wir den Dateinamen sicher kennen UND wir Workflow-
+        // Dateien gefunden haben. Sonst (API-Fehler, unbekanntes Verzeichnis,
+        // fehlendes workflow_ref) lieber nichts ausblenden.
+        if (filename && existing && existing.size > 0 && !existing.has(filename)) return false;
       }
       return matchesWorkflow && matchesBranch;
     });
