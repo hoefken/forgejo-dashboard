@@ -162,6 +162,14 @@
       return run.name || run.workflow_id || 'unknown';
     };
 
+    const getWorkflowFilename = (run) => {
+      if (run.workflow_ref) {
+        const match = run.workflow_ref.match(/workflows\/([^@]+)/);
+        if (match) return match[1].replace(/\.(yml|yaml)$/, '');
+      }
+      return null;
+    };
+
     const getJobPath = (repoFullName, run) => `${repoFullName}/${getWorkflowName(run)}`;
 
     const truncateMessage = (msg, maxLength = 60) => {
@@ -199,10 +207,22 @@
         branchPattern: '^main$',
         maxRuns: 500,
         organizations: [],
+        hideDeletedWorkflows: true,
       });
 
       const [discoveredRepos, setDiscoveredRepos] = useState([]);
       const [allRuns, setAllRuns] = useState([]);
+      const [existingWorkflows, setExistingWorkflows] = useState(() => {
+        try {
+          const raw = JSON.parse(localStorage.getItem('forgejo-dashboard-existing-workflows'));
+          if (raw && typeof raw === 'object') {
+            const result = {};
+            for (const [k, v] of Object.entries(raw)) result[k] = new Set(Array.isArray(v) ? v : []);
+            return result;
+          }
+        } catch {}
+        return {};
+      });
       const [loading, setLoading] = useState(false);
       const [discovering, setDiscovering] = useState(false);
       const [error, setError] = useState(null);
@@ -240,6 +260,16 @@
       }, [workflowRenames]);
 
       useEffect(() => {
+        try {
+          const serializable = {};
+          for (const [k, v] of Object.entries(existingWorkflows)) {
+            serializable[k] = v instanceof Set ? Array.from(v) : [];
+          }
+          localStorage.setItem('forgejo-dashboard-existing-workflows', JSON.stringify(serializable));
+        } catch {}
+      }, [existingWorkflows]);
+
+      useEffect(() => {
         localStorage.setItem('forgejo-dashboard-ui-prefs', JSON.stringify({ showSettings, autoRefresh, viewMode }));
       }, [showSettings, autoRefresh, viewMode]);
 
@@ -248,6 +278,7 @@
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
+            if (parsed.hideDeletedWorkflows === undefined) parsed.hideDeletedWorkflows = true;
             setConfig(parsed);
             const hasUiPrefs = localStorage.getItem('forgejo-dashboard-ui-prefs');
             if (!hasUiPrefs && parsed.baseUrl && (parsed.organizations?.length > 0 || parsed.repoPattern)) {
@@ -305,6 +336,42 @@
           }
         }
         return repos;
+      }, [apiCall]);
+
+      const fetchWorkflowFiles = useCallback(async (owner, repo, defaultBranch) => {
+        const names = new Set();
+        const addAllVariants = (raw) => {
+          if (!raw) return;
+          const s = String(raw);
+          names.add(s);
+          names.add(s.replace(/\.(yml|yaml)$/i, ''));
+        };
+
+        try {
+          const data = await apiCall(`/repos/${owner}/${repo}/actions/workflows`);
+          const workflows = data?.workflows || (Array.isArray(data) ? data : []);
+          for (const w of workflows) {
+            addAllVariants(w.id);
+            addAllVariants(w.name);
+            if (w.path) addAllVariants(w.path.split('/').pop());
+          }
+        } catch {}
+
+        if (names.size === 0) {
+          const ref = encodeURIComponent(defaultBranch || 'main');
+          for (const dir of ['.forgejo/workflows', '.gitea/workflows', '.github/workflows']) {
+            try {
+              const data = await apiCall(`/repos/${owner}/${repo}/contents/${dir}?ref=${ref}`);
+              if (Array.isArray(data)) {
+                for (const f of data) {
+                  if (f.type === 'file' && /\.(ya?ml)$/i.test(f.name)) addAllVariants(f.name);
+                }
+              }
+            } catch {}
+          }
+        }
+
+        return names;
       }, [apiCall]);
 
       const searchRepos = useCallback(async (query) => {
@@ -427,17 +494,20 @@
           const actualTotals = matchingRepos.map(() => maxRuns);
           const getTotal = () => actualTotals.reduce((a, b) => a + b, 0);
           let runsFetched = 0;
+          const workflowsByRepo = {};
           for (let i = 0; i < matchingRepos.length; i++) {
             const repo = matchingRepos[i];
             setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
             addLog(`\ud83d\udce5 Lade Runs f\u00fcr: ${repo.full_name}`);
+            const owner = repo.owner.login || repo.owner.username;
             const baseRunsFetched = runsFetched;
-            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+            const runs = await fetchRepoRuns(owner, repo.name, (repoRunCount) => {
               setProgress({ current: baseRunsFetched + repoRunCount, total: getTotal(), phase: 'fetching' });
             }, (totalCount) => {
               actualTotals[i] = totalCount > 0 ? Math.min(totalCount, maxRuns) : maxRuns;
               setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
             });
+            workflowsByRepo[repo.full_name] = await fetchWorkflowFiles(owner, repo.name, repo.default_branch);
             runsFetched += runs.length;
             allRunsCollected.push(...runs.map(run => ({
               ...run, _repo: repo, _repoFullName: repo.full_name, _jobPath: getJobPath(repo.full_name, run),
@@ -447,6 +517,7 @@
           setProgress({ current: runsFetched, total: getTotal(), phase: 'fetching' });
           addLog(`\u2705 Insgesamt ${allRunsCollected.length} Runs geladen`);
           setAllRuns(allRunsCollected);
+          setExistingWorkflows(workflowsByRepo);
           setLastUpdate(new Date());
         } catch (err) {
           setError(err.message);
@@ -456,7 +527,7 @@
           setDiscovering(false);
           setProgress({ current: 0, total: 0, phase: 'idle' });
         }
-      }, [config, discovering, fetchOrgRepos, searchRepos, fetchRepoRuns]);
+      }, [config, discovering, fetchOrgRepos, searchRepos, fetchRepoRuns, fetchWorkflowFiles]);
 
       const refreshRuns = useCallback(async () => {
         if (!config.baseUrl || !discoveredRepos.length || loading) return;
@@ -475,22 +546,26 @@
         try {
           const allRunsCollected = [];
           let runsFetched = 0;
+          const workflowsByRepo = {};
           for (let i = 0; i < discoveredRepos.length; i++) {
             const repo = discoveredRepos[i];
+            const owner = repo.owner.login || repo.owner.username;
             const baseRunsFetched = runsFetched;
             setProgress({ current: runsFetched, total: getTotal(), phase: 'refreshing' });
-            const runs = await fetchRepoRuns(repo.owner.login || repo.owner.username, repo.name, (repoRunCount) => {
+            const runs = await fetchRepoRuns(owner, repo.name, (repoRunCount) => {
               setProgress({ current: baseRunsFetched + repoRunCount, total: getTotal(), phase: 'refreshing' });
             }, (totalCount) => {
               actualTotals[i] = totalCount > 0 ? Math.min(totalCount, maxRuns) : maxRuns;
               setProgress({ current: runsFetched, total: getTotal(), phase: 'refreshing' });
             });
+            workflowsByRepo[repo.full_name] = await fetchWorkflowFiles(owner, repo.name, repo.default_branch);
             runsFetched += runs.length;
             allRunsCollected.push(...runs.map(run => ({
               ...run, _repo: repo, _repoFullName: repo.full_name, _jobPath: getJobPath(repo.full_name, run),
             })));
           }
           setAllRuns(allRunsCollected);
+          setExistingWorkflows(workflowsByRepo);
           setLastUpdate(new Date());
         } catch (err) {
           setError(err.message);
@@ -499,7 +574,7 @@
           setLoading(false);
           setProgress({ current: 0, total: 0, phase: 'idle' });
         }
-      }, [config.baseUrl, config.maxRuns, discoveredRepos, loading, fetchRepoRuns]);
+      }, [config.baseUrl, config.maxRuns, discoveredRepos, loading, fetchRepoRuns, fetchWorkflowFiles]);
 
       const filteredAndGroupedJobs = useMemo(() => {
         let workflowRegex;
@@ -510,10 +585,19 @@
         try { branchRegex = config.branchPattern ? new RegExp(config.branchPattern, 'i') : null; }
         catch (e) { branchRegex = null; }
 
+        const hideDeleted = config.hideDeletedWorkflows !== false;
+
         const filtered = allRuns.filter(run => {
           const wfName = getWorkflowName(run);
           const matchesWorkflow = workflowRegex.test(wfName) || workflowRegex.test(run._jobPath);
           const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
+          if (hideDeleted) {
+            const existing = existingWorkflows[run._repoFullName];
+            if (existing && existing.size > 0) {
+              const candidates = [run.workflow_id, run.name, wfName, getWorkflowFilename(run)].filter(Boolean);
+              if (!candidates.some(c => existing.has(String(c)))) return false;
+            }
+          }
           return matchesWorkflow && matchesBranch;
         });
 
@@ -542,7 +626,7 @@
           const sB = getStatus(b.latestRun.status, b.latestRun.conclusion);
           return sB.priority - sA.priority;
         });
-      }, [allRuns, config.workflowPattern, config.branchPattern]);
+      }, [allRuns, config.workflowPattern, config.branchPattern, config.hideDeletedWorkflows, existingWorkflows]);
 
       useEffect(() => {
         if (!discoveredRepos.length || !config.baseUrl || !autoRefresh) return;
@@ -750,6 +834,14 @@
                   </label>
                   <input type="text" value={config.branchPattern} onChange={e => setConfig(p => ({ ...p, branchPattern: e.target.value }))} placeholder="^main$" style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.borderLight}`, borderRadius: 4, padding: '0.6rem', color: '#22d3ee', fontSize: '0.8rem', fontFamily: 'monospace' }} />
                   <span style={{ display: 'block', fontSize: '0.6rem', color: t.textDimmest, marginTop: '0.3rem' }}>Default: ^main$ (nur main-Branch). Leer lassen f&uuml;r alle Branches.</span>
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: t.text, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={config.hideDeletedWorkflows !== false} onChange={e => setConfig(p => ({ ...p, hideDeletedWorkflows: e.target.checked }))} style={{ cursor: 'pointer' }} />
+                    Gel&ouml;schte Workflows ausblenden
+                  </label>
+                  <span style={{ display: 'block', fontSize: '0.6rem', color: t.textDimmest, marginTop: '0.3rem', marginLeft: '1.4rem' }}>Versteckt Workflows, deren YAML-Datei nicht mehr im Default-Branch des Repos existiert.</span>
                 </div>
 
                 <div>
