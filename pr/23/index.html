@@ -313,7 +313,7 @@
       const fetchWorkflowFiles = useCallback(async (owner, repo, defaultBranch) => {
         const ref = encodeURIComponent(defaultBranch || 'main');
         const names = new Set();
-        for (const dir of ['.gitea/workflows', '.github/workflows']) {
+        for (const dir of ['.forgejo/workflows', '.gitea/workflows', '.github/workflows']) {
           try {
             const data = await apiCall(`/repos/${owner}/${repo}/contents/${dir}?ref=${ref}`);
             if (Array.isArray(data)) {
@@ -547,7 +547,8 @@
           const matchesBranch = !branchRegex || branchRegex.test(run.head_branch || '');
           if (hideDeleted) {
             const existing = existingWorkflows[run._repoFullName];
-            if (existing && !existing.has(wfName)) return false;
+            // Nur filtern wenn wir tatsächlich Workflows gefunden haben
+            if (existing && existing.size > 0 && !existing.has(wfName)) return false;
           }
           return matchesWorkflow && matchesBranch;
         });
