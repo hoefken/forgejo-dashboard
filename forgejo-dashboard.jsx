@@ -390,47 +390,31 @@ export default function ForgejoDashboard() {
     };
   };
 
-  // Workflow Runs für ein Repo abrufen (Testflight→total_count→neueste Pages)
+  // Workflow Runs für ein Repo abrufen
   const fetchRepoRuns = useCallback(async (owner, repo, onProgress, onProbe) => {
     try {
-      const allRuns = [];
+      const runs = [];
       const PAGE_LIMIT = 50;
       const maxRuns = config.maxRuns || 500;
 
-      // Testflight mit limit=1: total_count günstig ermitteln
+      // Probe request to get total_count for progress display
       const probe = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=1&limit=1`);
       const totalCount = probe.total_count || 0;
       if (onProbe) onProbe(totalCount);
 
-      if (totalCount === 0) {
-        // Keine Runs oder API ohne total_count → Fallback: sequentiell von Seite 1
-        const probeRuns = Array.isArray(probe) ? probe : (probe.workflow_runs || []);
-        if (probeRuns.length === 0) return allRuns;
-        for (let page = 1; page <= Math.ceil(maxRuns / PAGE_LIMIT); page++) {
-          const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
-          const runs = data.workflow_runs || data || [];
-          if (runs.length === 0) break;
-          for (const run of runs) allRuns.push(normalizeRun(run));
-          if (onProgress) onProgress(allRuns.length);
-          if (runs.length < PAGE_LIMIT) break;
-        }
-        return allRuns;
-      }
-
-      // Nur die Pages mit den neusten maxRuns laden (API liefert älteste zuerst)
-      const lastPage = Math.ceil(totalCount / PAGE_LIMIT);
-      const startPage = Math.max(1, Math.ceil((totalCount - maxRuns + 1) / PAGE_LIMIT));
-
-      for (let page = startPage; page <= lastPage; page++) {
+      // API liefert neueste Runs zuerst – von Seite 1 aufwärts laden
+      const pagesToFetch = Math.ceil(maxRuns / PAGE_LIMIT);
+      for (let page = 1; page <= pagesToFetch; page++) {
         const data = await apiCall(`/repos/${owner}/${repo}/actions/runs?page=${page}&limit=${PAGE_LIMIT}`);
-        const runs = data.workflow_runs || data || [];
-        if (runs.length === 0) break;
-        for (const run of runs) allRuns.push(normalizeRun(run));
-        if (onProgress) onProgress(allRuns.length);
+        const pageRuns = data.workflow_runs || (Array.isArray(data) ? data : []);
+        if (pageRuns.length === 0) break;
+        for (const run of pageRuns) runs.push(normalizeRun(run));
+        if (onProgress) onProgress(runs.length);
+        if (pageRuns.length < PAGE_LIMIT) break;
+        if (runs.length >= maxRuns) break;
       }
 
-      // Auf maxRuns trimmen (neueste = Ende der aufsteigenden Liste)
-      return allRuns.slice(-maxRuns);
+      return runs.slice(0, maxRuns);
     } catch (err) {
       if (!err.message.includes('404')) {
         addLog(`⚠️ Runs für ${owner}/${repo}: ${err.message}`);
