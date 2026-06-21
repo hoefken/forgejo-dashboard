@@ -281,7 +281,7 @@ export default function ForgejoDashboard() {
     if (config.token) {
       try {
         const response = await fetch(url, {
-          headers: { 'Accept': 'application/json', 'Authorization': `token ${config.token}` },
+          headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${config.token}` },
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         return response.json();
